@@ -1,5 +1,7 @@
+import sys
 import graphlib
 from pathlib import Path
+import subprocess
 from typing import Dict
 from typing import List
 from typing import Set
@@ -42,6 +44,7 @@ class Table(BaseModel):
 class NodeConfig(BaseModel):
     id: str
     deps: List[str] = []
+    prep: List[Path] = []
     tables: List[Table]
 
 
@@ -95,6 +98,14 @@ class DAG:
 
     def run(self, node_id: str, target: Target):
         nc = self._nodes[node_id]
+        n = len(nc.prep)
+        for i, action in enumerate(nc.prep, start=1):
+            ret = run_action(action, i, n)
+            if ret == 0:
+                continue
+            print(f"error - prep {i}/{n} {action} failed")
+            raise RuntimeError("prep step failed")
+        return
         for table in nc.tables:
             load_table(target, table)
 
@@ -106,6 +117,9 @@ def parse_makegis_yml(path: Path, schema: str, prefix: str) -> NodeConfig:
     deps = []
     if "deps" in d:
         deps = d["deps"]
+    prep = []
+    if "prep" in d:
+        prep = [Path(path.parent) / Path(item) for item in d["prep"]]
     tables = []
     for local_name, kvs in d["tables"].items():
         src = None
@@ -129,6 +143,7 @@ def parse_makegis_yml(path: Path, schema: str, prefix: str) -> NodeConfig:
     return NodeConfig(
         id=f"{schema}{'.' if prefix else ''}{prefix}",
         deps=deps,
+        prep=prep,
         tables=tables,
     )
 
@@ -149,3 +164,28 @@ def load_duckdb_table(target: Target, table_name: str, src: DuckDBSource):
 
 def load_sql_source(target: Target, table_name: str, src: SQLSource):
     print(f"loading sql table {table_name}")
+
+
+def run_action(action: Path, i: int, n: int):
+    cmd = []
+    if action.suffix == ".py":
+        python_exe = sys.executable
+        cmd.append(python_exe)
+        cmd.append("-u")  # unbuffered mode to display logs as they appear
+        cmd.append(action)
+    else:
+        raise NotImplementedError(f"unsupported action: {action}")
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(f"prep ({i}/{n}) | {line}", end="")
+
+    return process.wait()
