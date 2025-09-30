@@ -100,13 +100,16 @@ def ddb2pg(
                 )
 
         # Add primary key if any
-        pks = [col for i, col, dtype, not_null, default, pk in columns if pk]
+        pks = [col_str for i, col_str, dtype, not_null, default, pk in columns if pk]
+        pks = [sql.Identifier(k) for k in pks]
         if pks:
-            conn.execute(
-                sql.SQL(
-                    "alter table {table} add primary key ({', '.join(pks)})"
-                ).format(table=table)
+            print("debug - adding primary key")
+            stmt = sql.SQL("alter table {table} add primary key ({key})").format(
+                table=table.ident,
+                key=sql.SQL(",").join(pks),
             )
+            print(f"trace - {stmt.as_string()}")
+            conn.execute(stmt)
 
         conn.commit()
 
