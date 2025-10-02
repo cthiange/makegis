@@ -1,0 +1,19 @@
+---
+src_dir: ./src
+
+defaults:
+  load:
+    epsg: 4326
+    geom_index: false
+
+targets:
+  pg_prod:
+    host: prod.example.com
+    port: 5432
+    user: mkgs
+    db: postgres
+  pg_dev:
+    host: 127.0.0.1
+    port: 5432
+    user: mkgs
+    db: postgres

@@ -1,0 +1,20 @@
+load:
+  defaults:
+    epsg: 4326
+    geom_index: false
+    geom_column: geom
+
+  table_1:
+    duckdb: ~/path/to/some.db
+
+  table_2:
+    duckdb: ~/path/to/some.db
+    table: not_table_2
+    index: true
+
+  table_3:
+    file: ~/path/to/file.shp
+    epsg: 2193
+
+  table_4:
+    wfs: https://wfs.example.com

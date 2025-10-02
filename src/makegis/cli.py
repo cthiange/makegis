@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import argparse
 import logging
@@ -6,11 +5,13 @@ import logging
 import dotenv
 
 from .dag import DAG
-from .config import Config
+from .dag.builder import Builder
+from .config import RootConfig
 
 
 def cli():
-    logging.info("makegis 0.1.0")
+    print("makegis 0.1.0")
+    logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(
         prog="mkgs", description="Spatial database builder"
@@ -46,16 +47,16 @@ def cli():
 
 def check(args):
     print("check...")
-    cfg = Config.from_file(Path("./makegis.root.yml"))
-    dag = DAG.from_root_path(cfg.src_dir)
+    cfg = RootConfig.from_file(Path("./makegis.root.yml"))
+    dag = Builder(cfg).build()
     dag.print()
 
 
 def run(args):
     print("run...")
-    cfg = Config.from_file(Path("./makegis.root.yml"))
+    cfg = RootConfig.from_file(Path("./makegis.root.yml"))
     target = cfg.targets[args.target]
-    dag = DAG.from_root_path(cfg.src_dir)
+    dag = Builder(cfg).build()
     dag.run(args.node, target)
 
 

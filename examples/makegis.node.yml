@@ -1,0 +1,22 @@
+node:
+  deps:
+    - table: raw.upstream_table
+  prep:
+    - do_this_first.py
+    - then_this.py
+  do:
+    load:
+      defaults:
+        epsg: 4326
+        geom_index: false
+        geom_column: geom
+      table_1:
+        duckdb: ~/path/to/some.db
+    run:
+      - cmd: script_1.py
+        creates:
+          - table: table_created_by_script_1
+          - table: other_table_created_by_script_1
+      - cmd: script_2.py
+        creates:
+          - table: another_table
