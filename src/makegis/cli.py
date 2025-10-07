@@ -47,17 +47,41 @@ def cli():
 
 def check(args):
     print("check...")
-    cfg = RootConfig.from_file(Path("./makegis.root.yml"))
+    cfg = load_root_config()
     dag = Builder(cfg).build()
     dag.print()
 
 
 def run(args):
     print("run...")
-    cfg = RootConfig.from_file(Path("./makegis.root.yml"))
+    cfg = load_root_config()
     target = cfg.targets[args.target]
     dag = Builder(cfg).build()
     dag.run(args.node, target)
+
+
+def load_root_config():
+    cfg_path = find_root_config()
+
+    # Load .env in same dir as makegis.root.yml
+    cfg_dir = cfg_path.parent
+    dotenv.load_dotenv(cfg_dir / ".env")
+
+    return RootConfig.from_file(cfg_path)
+
+
+def find_root_config(cwd: Path = Path(".").resolve()):
+    """
+    Returns path to first makegis.root.yml file found in current dir or parents.
+    """
+    path = cwd / "makegis.root.yml"
+    if path.exists():
+        return path
+    parent = cwd.parent
+    if parent == cwd:
+        print("Found no makegis root file in current directory or its parents.")
+        exit(1)
+    return find_root_config(cwd=parent)
 
 
 if __name__ == "__main__":

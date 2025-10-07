@@ -47,7 +47,11 @@ class RootConfig(BaseModel):
         print(f"debug - reading {path}")
         with open(path) as f:
             d = yaml.load(f, Loader)
-        return cls.from_dict(d)
+        rc = cls.from_dict(d)
+        # Resolve path of src dir
+        if not rc.src_dir.is_absolute():
+            rc.src_dir = (path.parent / rc.src_dir).resolve()
+        return rc
 
     @classmethod
     def from_yaml(cls, s: str):
