@@ -107,7 +107,7 @@ class TransformBlock(BaseModel):
         return TransformBlock(transforms=transforms)
 
 
-class CreatedItem(BaseModel):
+class DatabaseItem(BaseModel):
     type: Literal["table", "function"]
     name: str
 
@@ -117,16 +117,16 @@ class CreatedItem(BaseModel):
             len(d) == 1
         ), "each item in a 'creates' block must have exactly 1 key e.g. - table: name"
         k, v = next(iter(d.items()))
-        return CreatedItem(type=k, name=v)
+        return DatabaseItem(type=k, name=v)
 
 
 class RunTask(BaseModel):
     cmd: str
-    creates: List[CreatedItem]
+    creates: List[DatabaseItem]
 
     @classmethod
     def from_dict(cls, d: Dict):
-        creates = [CreatedItem.from_dict(item) for item in d.pop("creates", [])]
+        creates = [DatabaseItem.from_dict(item) for item in d.pop("creates", [])]
         return RunTask(creates=creates, **d)
 
 
@@ -157,7 +157,7 @@ class DoBlock(BaseModel):
 class NodeBlock(BaseModel):
     """Top-level 'node' block in a makegis.yml file"""
 
-    deps: List[CreatedItem] | None = []
+    deps: List[DatabaseItem] | None = []
     prep: List[str] | None = []
     do: DoBlock
     post: List[str] | None = []
@@ -165,7 +165,7 @@ class NodeBlock(BaseModel):
 
     @classmethod
     def from_dict(cls, d: Dict):
-        deps = [CreatedItem.from_dict(d) for d in d.pop("deps", []) or []]
+        deps = [DatabaseItem.from_dict(d) for d in d.pop("deps", []) or []]
         do = DoBlock.from_dict(d.pop("do"))
         return NodeBlock(do=do, **d)
 

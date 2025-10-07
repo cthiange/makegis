@@ -13,7 +13,7 @@ from ..config.makegis import SourceBlock
 from ..config.makegis import TransformBlock
 from ..config.makegis import NodeBlock
 from ..config.makegis import LoadItem
-from ..config.makegis import CreatedItem
+from ..config.makegis import DatabaseItem
 from ..core.load import Destination
 from ..core.load import LoadJob
 from ..core.load import DuckDBSource
@@ -23,11 +23,10 @@ from ..core.transforms import Transform
 from ..core.commands import Command
 from .dag import DAG
 from .dag import DatabaseObject
-from .dag import DatabaseTable
-from .dag import DatabaseFunction
 from .dag import SourceNode
 from .dag import TransformNode
 from .dag import CustomNode
+from .sql import analyze_sql_file
 
 
 @dataclass(frozen=True)
@@ -85,7 +84,11 @@ def process_load_block(
     local_defaults = block.defaults
     for item in block.items:
         job = prepare_load_job(ctx, item, local_defaults, global_defaults)
-        table = DatabaseTable(schema=job.dst.schema, name=job.dst.table)
+        table = DatabaseObject(
+            schema=job.dst.schema,
+            name=job.dst.table,
+            type="relation",
+        )
         nodes.append(SourceNode(id=table.full_name, owns=set([table]), job=job))
     return nodes
 
@@ -95,11 +98,22 @@ def process_transform_block(
 ) -> List[TransformNode]:
     nodes = []
     for t in block.transforms:
+        assert t.path.suffix == ".sql"
+        contextualized_script_path = ctx.path.parent / t.path
+        report = analyze_sql_file(contextualized_script_path)
+        deps = {
+            DatabaseObject(schema=d.schema, name=d.name, type=d.type)
+            for d in report.dependencies
+        }
+        owns = {
+            DatabaseObject(schema=d.schema, name=d.name, type=d.type)
+            for d in report.created
+        }
         node = TransformNode(
             id=f"{ctx.schema}{'.' + ctx.prefix if ctx.prefix else ''}",
-            deps=set(),  # TODO parse sql to find deps
-            owns=set(),  # TODO parse sql to find owned objects
-            transform=Transform(sql=t.path),
+            deps=deps,
+            owns=owns,
+            transform=Transform(sql=contextualized_script_path),
         )
         nodes.append(node)
     return nodes
@@ -110,7 +124,7 @@ def process_node_block(
     block: NodeBlock,
     global_defaults: LoadDefaults,
 ) -> CustomNode:
-    deps = set([db_object_from_created_item(item) for item in block.deps or []])
+    deps = set([db_object_from_db_item(item) for item in block.deps or []])
     owns = set()
     load_jobs = []
     if block.do.load is not None:
@@ -124,7 +138,7 @@ def process_node_block(
     for task in block.do.run or []:
         run_commands.append(Command(path=ctx.path.parent / Path(task.cmd)))
         for item in task.creates:
-            owns.add(db_object_from_created_item(item))
+            owns.add(db_object_from_db_item(item))
     return CustomNode(
         id=f"{ctx.schema}{'.' + ctx.prefix if ctx.prefix else ''}",
         deps=deps,
@@ -171,17 +185,17 @@ def parse_epsg(e: int | str | None) -> Tuple[int | None, int | None]:
     raise ValueError("epsg should be an integer or a string of the form <int>:<int>")
 
 
-def db_object_from_created_item(item: CreatedItem) -> DatabaseObject:
+def db_object_from_db_item(item: DatabaseItem) -> DatabaseObject:
     assert "." in item.name
     parts = item.name.split(".")
     schema = parts[0]
     name = ".".join(parts[1:])
     match item.type:
         case "table":
-            return DatabaseTable(schema=schema, name=name)
+            return DatabaseObject(schema=schema, name=name, type="relation")
         case "function":
-            return DatabaseFunction(schema=schema, name=name)
-    raise ValueError(f"Unknown database object type {item.type}")
+            return DatabaseObject(schema=schema, name=name, type="function")
+    raise ValueError(f"Unknown database item type {item.type}")
 
 
 def prepare_load_job(

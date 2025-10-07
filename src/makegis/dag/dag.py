@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 from typing import List
+from typing import Literal
+from typing import NamedTuple
 from typing import Set
 
 import graphlib
@@ -15,27 +17,14 @@ from ..config import TargetConfig
 from .. import postgis
 
 
-@dataclass(frozen=True)
-class GenericDatabaseObject:
+class DatabaseObject(NamedTuple):
     schema: str
     name: str
+    type: Literal["relation", "function"]
 
     @property
     def full_name(self):
         return f"{self.schema}.{self.name}"
-
-
-@dataclass(frozen=True)
-class DatabaseTable(GenericDatabaseObject):
-    pass
-
-
-@dataclass(frozen=True)
-class DatabaseFunction(GenericDatabaseObject):
-    pass
-
-
-type DatabaseObject = DatabaseTable | DatabaseFunction
 
 
 @dataclass(frozen=True)
