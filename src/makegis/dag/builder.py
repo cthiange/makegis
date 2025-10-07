@@ -133,7 +133,8 @@ def process_node_block(
         # Extract load jobs from resulting nodes
         load_jobs = [sn.job for sn in source_nodes]
         # Collect created tables
-        owns |= set().union(*[sn.owns for sn in source_nodes])
+        for sn in source_nodes:
+            owns |= sn.owns
     run_commands = []
     for task in block.do.run or []:
         run_commands.append(Command(path=ctx.path.parent / Path(task.cmd)))
@@ -142,7 +143,7 @@ def process_node_block(
     return CustomNode(
         id=f"{ctx.schema}{'.' + ctx.prefix if ctx.prefix else ''}",
         deps=deps,
-        owns=set(),
+        owns=owns,
         prep=[Command(path=ctx.path.parent / Path(s)) for s in block.prep or []],
         load=load_jobs,
         run=run_commands,
