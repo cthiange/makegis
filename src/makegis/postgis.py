@@ -234,24 +234,6 @@ def _ensure_gist_index(conn: psycopg.Connection, table: Table, col: Column):
     )
 
 
-# # TODO: refactor to not need this anymore (i.e. use distinct schema/table args)
-# def schema_name_identifier(sn: str) -> sql.Identifier:
-#     schema, table = split_schema_table_name(sn)
-#     return sql.Identifier(schema, table)
-
-
-# def split_schema_table_name(sn: str) -> Tuple[str, str]:
-#     """
-#     Split a 'schema.table_name type string into (schema, table_name)
-
-#     Assumes schema to always be present.
-#     """
-#     assert "." in sn
-#     schema = sn.split(".")[0]
-#     table = sn[len(schema) + 1 :]
-#     return (schema, table)
-
-
 def _column_has_index(
     conn: psycopg.Connection,
     table: Table,
@@ -293,7 +275,6 @@ def load_wfs(
     conn_str: str,
     src: WFSSource,
     dst: Destination,
-    o4w_env: str | None = None,
 ):
     """
     Uses local ogr2ogr executable.
