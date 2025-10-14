@@ -12,6 +12,7 @@ from .config import TargetConfig
 from .core.load import LoadJob
 from .core.load import DuckDBSource
 from .core.load import WFSSource
+from .core.load import FileSource
 from .core.load import Destination
 
 
@@ -21,6 +22,14 @@ def load_table(target: TargetConfig, job: LoadJob):
             ddb2pg(target.conn_str(), job.src, job.dst)
         case WFSSource():
             load_wfs(target.conn_uri(), job.src, job.dst)
+        case FileSource():
+            match job.src.path.suffix:
+                case ".gdb":
+                    load_gdb(target.conn_uri(), job.src, job.dst)
+                case _:
+                    raise NotImplementedError(
+                        f"Loading {job.src.path.suffix} files is not supprted yet"
+                    )
         case _:
             raise NotImplementedError
 
@@ -304,6 +313,43 @@ def load_wfs(
     if ret != 0:
         print(f"error - loading wfs failed with code ({ret})")
         raise RuntimeError("loading wfs failed")
+
+
+def load_gdb(
+    conn_str: str,
+    src: FileSource,
+    dst: Destination,
+):
+    """
+    Uses local ogr2ogr executable.
+    """
+    ogr2ogr = r"ogr2ogr.exe"
+    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    assert src.layer is not None
+    cmd += f' "{src.path}" "{src.layer}"'
+    options = ""
+    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += " -lco FID=gid"
+    options += " -progress"
+    if dst.geom_column is not None:
+        options += f" -lco GEOMETRY_NAME={dst.geom_column}"
+    if src.epsg is not None:
+        options += f" -s_src EPSG:{src.epsg}"
+    if dst.epsg is not None:
+        options += f" -t_srs EPSG:{dst.epsg}"
+    options += " --config OGR_PG_ENABLE_METADATA=NO"
+    options += " -overwrite"
+    if dst.geom_index:
+        options += " -lco SPATIAL_INDEX=GIST"
+    else:
+        options += " -lco SPATIAL_INDEX=NONE"
+    cmd += options
+
+    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    print(f"debug - return code: {ret}")
+    if ret != 0:
+        print(f"error - loading gdb failed with code ({ret})")
+        raise RuntimeError("loading gdb layer failed")
 
 
 def run_ogr_cmd(cmd: str, label: str) -> int:

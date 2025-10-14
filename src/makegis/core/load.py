@@ -19,6 +19,8 @@ class DuckDBSource(BaseSource):
 @dataclass(frozen=True)
 class FileSource(BaseSource):
     path: Path
+    # Optional layer name for file formats supporting it
+    layer: str | None
 
 
 @dataclass(frozen=True)

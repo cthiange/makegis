@@ -38,6 +38,7 @@ class DuckDBSourceBlock(BaseSourceBlock):
 class FileSourceBlock(BaseSourceBlock):
     type: Literal["file"] = "file"
     path: Path
+    layer: str | None = None
 
 
 class WFSSourceBlock(BaseSourceBlock):

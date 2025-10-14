@@ -224,7 +224,7 @@ def prepare_load_job(
             **settings,
         )
     elif item.src.type == "file":
-        src = FileSource(path=item.src.path, **settings)
+        src = FileSource(path=item.src.path, layer=item.src.layer, **settings)
     elif item.src.type == "wfs":
         src = WFSSource(url=item.src.url, **settings)
     else:
