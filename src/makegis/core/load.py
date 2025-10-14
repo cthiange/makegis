@@ -1,11 +1,18 @@
 from pathlib import Path
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass(frozen=True)
 class BaseSource:
     # Explicit srid of geometry in source dataset
     epsg: int | None
+
+
+@dataclass(frozen=True)
+class EsriSource(BaseSource):
+    url: str
+    f: Literal["pgeojson", "pjson"]
 
 
 @dataclass(frozen=True)
@@ -28,7 +35,7 @@ class WFSSource(BaseSource):
     url: str
 
 
-type Source = DuckDBSource | FileSource | WFSSource
+type Source = EsriSource | DuckDBSource | FileSource | WFSSource
 
 
 @dataclass(frozen=True)

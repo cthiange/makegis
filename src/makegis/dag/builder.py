@@ -16,6 +16,7 @@ from ..config.makegis import LoadItem
 from ..config.makegis import DatabaseItem
 from ..core.load import Destination
 from ..core.load import LoadJob
+from ..core.load import EsriSource
 from ..core.load import DuckDBSource
 from ..core.load import FileSource
 from ..core.load import WFSSource
@@ -217,7 +218,9 @@ def prepare_load_job(
     )
     # Source
     settings = {"epsg": src_epsg}
-    if item.src.type == "duckdb":
+    if item.src.type == "esri":
+        src = EsriSource(url=item.src.url, f=item.src.f, **settings)
+    elif item.src.type == "duckdb":
         src = DuckDBSource(
             path=item.src.path,
             table=item.src.table or item.name,

@@ -10,6 +10,7 @@ from psycopg import sql
 
 from .config import TargetConfig
 from .core.load import LoadJob
+from .core.load import EsriSource
 from .core.load import DuckDBSource
 from .core.load import WFSSource
 from .core.load import FileSource
@@ -18,6 +19,8 @@ from .core.load import Destination
 
 def load_table(target: TargetConfig, job: LoadJob):
     match job.src:
+        case EsriSource():
+            load_esri(target.conn_uri(), job.src, job.dst)
         case DuckDBSource():
             ddb2pg(target.conn_str(), job.src, job.dst)
         case WFSSource():
@@ -350,6 +353,42 @@ def load_gdb(
     if ret != 0:
         print(f"error - loading gdb failed with code ({ret})")
         raise RuntimeError("loading gdb layer failed")
+
+
+def load_esri(
+    conn_str: str,
+    src: EsriSource,
+    dst: Destination,
+):
+    """
+    Uses local ogr2ogr executable.
+    """
+    ogr2ogr = r"ogr2ogr.exe"
+    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    # This will do for now but might want to expose more query parameters
+    cmd += f' "{src.url}/query?where=1=1&outFields=*&f={src.f}"'
+    options = ""
+    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += " -lco FID=gid"
+    if dst.geom_column is not None:
+        options += f" -lco GEOMETRY_NAME={dst.geom_column}"
+    if src.epsg is not None:
+        options += f" -s_src EPSG:{src.epsg}"
+    if dst.epsg is not None:
+        options += f" -t_srs EPSG:{dst.epsg}"
+    options += " --config OGR_PG_ENABLE_METADATA=NO"
+    options += " -overwrite"
+    if dst.geom_index:
+        options += " -lco SPATIAL_INDEX=GIST"
+    else:
+        options += " -lco SPATIAL_INDEX=NONE"
+    cmd += options
+
+    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    print(f"debug - return code: {ret}")
+    if ret != 0:
+        print(f"error - loading esri failed with code ({ret})")
+        raise RuntimeError("loading esri failed")
 
 
 def run_ogr_cmd(cmd: str, label: str) -> int:

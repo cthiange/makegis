@@ -29,6 +29,12 @@ class BaseSourceBlock(BaseModel):
     geom_column: str | None = None
 
 
+class EsriSourceBlock(BaseSourceBlock):
+    type: Literal["esri"] = "esri"
+    url: str
+    f: Literal["pjson", "pgeojson"]
+
+
 class DuckDBSourceBlock(BaseSourceBlock):
     type: Literal["duckdb"] = "duckdb"
     path: Path
@@ -46,9 +52,9 @@ class WFSSourceBlock(BaseSourceBlock):
     url: str
 
 
-type SourceBlock = DuckDBSourceBlock | FileSourceBlock | WFSSourceBlock
+type SourceBlock = EsriSourceBlock | DuckDBSourceBlock | FileSourceBlock | WFSSourceBlock
 
-SOURCE_KEYS = set(["duckdb", "file", "wfs"])
+SOURCE_KEYS = set(["esri", "duckdb", "file", "wfs"])
 
 
 class LoadItem(BaseModel):
@@ -69,7 +75,10 @@ class LoadItem(BaseModel):
             raise RuntimeError(
                 f"Too many source keys in load block item, expecting exactly one of {SOURCE_KEYS}"
             )
-        if "duckdb" in matched_source_keys:
+        if "esri" in matched_source_keys:
+            url = v.pop("esri")
+            src = EsriSourceBlock(url=url, **v)
+        elif "duckdb" in matched_source_keys:
             path = v.pop("duckdb")
             src = DuckDBSourceBlock(path=path, **v)
         elif "file" in matched_source_keys:
