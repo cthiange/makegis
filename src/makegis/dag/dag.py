@@ -106,7 +106,7 @@ class DAG:
         node = self._nodes[node_id]
         match node:
             case SourceNode():
-                raise NotImplementedError
+                postgis.load_table(target, node.job)
             case TransformNode():
                 raise NotImplementedError
             case CustomNode():

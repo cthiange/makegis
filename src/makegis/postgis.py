@@ -1,3 +1,9 @@
+import re
+import subprocess
+import os
+from pathlib import Path
+from typing import Dict
+
 import duckdb
 import psycopg
 from psycopg import sql
@@ -5,6 +11,7 @@ from psycopg import sql
 from .config import TargetConfig
 from .core.load import LoadJob
 from .core.load import DuckDBSource
+from .core.load import WFSSource
 from .core.load import Destination
 
 
@@ -12,6 +19,8 @@ def load_table(target: TargetConfig, job: LoadJob):
     match job.src:
         case DuckDBSource():
             ddb2pg(target.conn_str(), job.src, job.dst)
+        case WFSSource():
+            load_wfs(target.conn_uri(), job.src, job.dst)
         case _:
             raise NotImplementedError
 
@@ -278,3 +287,65 @@ def _column_has_index(
     )
     rows = conn.execute(qry).fetchall()
     return len(rows) > 0
+
+
+def load_wfs(
+    conn_str: str,
+    src: WFSSource,
+    dst: Destination,
+    o4w_env: str | None = None,
+):
+    """
+    Uses local ogr2ogr executable.
+    """
+    ogr2ogr = r"ogr2ogr.exe"
+    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    cmd += f' WFS:"{src.url}"'
+    options = ""
+    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += " -lco FID=gid"
+    if dst.geom_column is not None:
+        options += f" -lco GEOMETRY_NAME={dst.geom_column}"
+    if src.epsg is not None:
+        options += f" -s_src EPSG:{src.epsg}"
+    if dst.epsg is not None:
+        options += f" -t_srs EPSG:{dst.epsg}"
+    options += " --config OGR_PG_ENABLE_METADATA=NO"
+    options += " -overwrite"
+    if dst.geom_index:
+        options += " -lco SPATIAL_INDEX=GIST"
+    else:
+        options += " -lco SPATIAL_INDEX=NONE"
+    cmd += options
+
+    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    print(f"debug - return code: {ret}")
+    if ret != 0:
+        print(f"error - loading wfs failed with code ({ret})")
+        raise RuntimeError("loading wfs failed")
+
+
+def run_ogr_cmd(cmd: str, label: str) -> int:
+
+    # Check if we're using OSGeo4W
+    o4w_env = os.environ.get("MKGS_O4W_ENV", None)
+    if o4w_env is not None:
+        cmd = f"@echo off && {o4w_env} && " + cmd
+        shell = True
+    else:
+        shell = False
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        shell=shell,
+    )
+
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(f"load ({label}) | {line}", end="")
+
+    return process.wait()
