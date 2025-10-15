@@ -132,6 +132,32 @@ class DAG:
                     print(f"error - cleanup {i}/{n} {action} failed")
                     raise RuntimeError("cleanup step failed")
 
+    def show(self, pattern: str):
+        """
+        Print a DAG node or subset.
+
+        Usefull to test out selection patterns.
+        """
+        node = self._nodes[pattern]
+        print_node(node)
+
+
+def print_node(node: Node):
+    match node:
+        case SourceNode():
+            node_type = "S"
+        case TransformNode():
+            node_type = "T"
+        case CustomNode():
+            node_type = "C"
+        case _:
+            node_type = "?"
+    print(f"[{node_type}] {node.id}")
+    for dbo in node.deps:
+        print(f"\t{dbo.full_name} -->")
+    for dbo in node.owns:
+        print(f"\t--> {dbo.full_name}")
+
 
 def run_action(action: Path, i: int, n: int):
     cmd = []

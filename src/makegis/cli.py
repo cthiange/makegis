@@ -37,6 +37,10 @@ def cli():
     # check_parser.add_argument("node", type=str, help="node help")
     check_parser.set_defaults(func=check)
 
+    show_parser = subparsers.add_parser("show", help="show help")
+    show_parser.add_argument("pattern", type=str, help="DAG selection pattern")
+    show_parser.set_defaults(func=show)
+
     # Load .env
     dotenv.load_dotenv(".env")
 
@@ -58,6 +62,13 @@ def run(args):
     target = cfg.targets[args.target]
     dag = Builder(cfg).build()
     dag.run(args.node, target)
+
+
+def show(args):
+    print("show...")
+    cfg = load_root_config()
+    dag = Builder(cfg).build()
+    dag.show(args.pattern)
 
 
 def load_root_config():
