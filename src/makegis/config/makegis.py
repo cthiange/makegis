@@ -27,6 +27,8 @@ class BaseSourceBlock(BaseModel):
     epsg: int | str | None = None
     geom_index: bool | None = None
     geom_column: str | None = None
+    # Name of column to use as primary key
+    pk: str | None = None
 
 
 class EsriSourceBlock(BaseSourceBlock):

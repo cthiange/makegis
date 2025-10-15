@@ -7,6 +7,8 @@ from typing import Literal
 class BaseSource:
     # Explicit srid of geometry in source dataset
     epsg: int | None
+    # Name of column to use as primary key
+    pk: str | None
 
 
 @dataclass(frozen=True)

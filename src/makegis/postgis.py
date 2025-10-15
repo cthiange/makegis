@@ -1,8 +1,5 @@
-import re
 import subprocess
 import os
-from pathlib import Path
-from typing import Dict
 
 import duckdb
 import psycopg
@@ -72,6 +69,8 @@ def ddb2pg(
     print(
         f"postgis - loading duckdb table from {src.path}:{src.table} to {dst.schema}.{dst.table}"
     )
+    if src.pk is not None:
+        raise NotImplementedError("Explicit PK not implemented for DuckDB sources")
     db = duckdb.connect()
     db.sql("install spatial;")
     db.sql("load spatial;")
@@ -296,7 +295,7 @@ def load_wfs(
     cmd += f' WFS:"{src.url}"'
     options = ""
     options += f' -nln "{dst.schema}.{dst.table}"'
-    options += " -lco FID=gid"
+    options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
     if src.epsg is not None:
@@ -332,7 +331,7 @@ def load_gdb(
     cmd += f' "{src.path}" "{src.layer}"'
     options = ""
     options += f' -nln "{dst.schema}.{dst.table}"'
-    options += " -lco FID=gid"
+    options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     options += " -progress"
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
@@ -369,7 +368,7 @@ def load_esri(
     cmd += f' "{src.url}/query?where=1=1&outFields=*&f={src.f}"'
     options = ""
     options += f' -nln "{dst.schema}.{dst.table}"'
-    options += " -lco FID=gid"
+    options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
     if src.epsg is not None:

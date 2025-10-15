@@ -219,17 +219,24 @@ def prepare_load_job(
     # Source
     settings = {"epsg": src_epsg}
     if item.src.type == "esri":
-        src = EsriSource(url=item.src.url, f=item.src.f, **settings)
+        src = EsriSource(url=item.src.url, f=item.src.f, pk=item.src.pk, **settings)
     elif item.src.type == "duckdb":
+        assert item.src.pk is None, "explicit pk not implemented for duckdb source"
         src = DuckDBSource(
             path=item.src.path,
             table=item.src.table or item.name,
+            pk=item.src.pk,
             **settings,
         )
     elif item.src.type == "file":
-        src = FileSource(path=item.src.path, layer=item.src.layer, **settings)
+        src = FileSource(
+            path=item.src.path,
+            layer=item.src.layer,
+            pk=item.src.pk,
+            **settings,
+        )
     elif item.src.type == "wfs":
-        src = WFSSource(url=item.src.url, **settings)
+        src = WFSSource(url=item.src.url, pk=item.src.pk, **settings)
     else:
         raise NotImplementedError("Unhandled source type")
     return LoadJob(src=src, dst=dest)
