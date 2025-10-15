@@ -202,15 +202,18 @@ class MakeGISConfig(BaseModel):
     def from_dict(cls, d: Dict):
         expand_dict_strings(d)
         assert len(d) == 1
-        if "load" in d:
+        key = list(d)[0]
+        if key == "load":
             typ = "load"
             block = LoadBlock.from_dict(d["load"])
-        elif "transform" in d:
+        elif key == "transform":
             typ = "transform"
             block = TransformBlock.from_sequence(d["transform"])
-        elif "node" in d:
+        elif key == "node":
             typ = "node"
             block = NodeBlock.from_dict(d["node"])
         else:
-            raise RuntimeError("Unknown makegis file key")
+            raise RuntimeError(
+                f"Unknown makegis file key '{key}', should be one of load, transform or node"
+            )
         return MakeGISConfig(type=typ, block=block)
