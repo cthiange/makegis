@@ -32,14 +32,14 @@ class State:
     tmps: Set[DBO] = field(default_factory=set)
 
     def begin(self):
-        print("debug - begin tx")
+        # print("debug - begin tx")
         assert self.tx is False
         self.tx = True
         assert not self.tx_news
         assert not self.tx_dels
 
     def commit(self):
-        print("debug - commit tx")
+        # print("debug - commit tx")
         assert self.tx is True
         self.tx = False
         # Relations created in tx
@@ -50,7 +50,7 @@ class State:
         self.tx_dels = set()
 
     def rollback(self):
-        print("debug - rollback tx")
+        # print("debug - rollback tx")
         assert self.tx is True
         self.tx = False
         self.tx_news = set()
@@ -100,21 +100,14 @@ def analyze_sql_content(sql: str) -> SQLReport:
                 state.commit()
             case exp.Rollback():
                 state.rollback()
-            case exp.Create():
-                match node.this:
-                    case exp.UserDefinedFunction():
-                        created = DBO(
-                            node.this.this.db,
-                            node.this.this.name,
-                            "function",
-                        )
-                        node = node.expression
-                    case _:
-                        created = DBO(
-                            node.this.db,
-                            node.this.name,
-                            "function" if node.kind == "FUNCTION" else "relation",
-                        )
+
+            case exp.Create(this=exp.Table()):
+                assert node.kind != "FUNCTION"
+                created = DBO(
+                    node.this.db,
+                    node.this.name,
+                    "relation",
+                )
                 deps = list(node.find_all(exp.Table))
                 deps = [DBO(t.db, t.this.name, "relation") for t in deps]
                 deps = [dbo for dbo in deps if dbo != created]
@@ -132,6 +125,34 @@ def analyze_sql_content(sql: str) -> SQLReport:
                     if exp.TemporaryProperty() in props.args.get("expressions", []):
                         temp = True
                 state.create(created, deps, temp=temp)
+
+            case exp.Create(this=exp.UserDefinedFunction()):
+                assert node.kind == "FUNCTION"
+                created = DBO(
+                    node.this.this.db,
+                    node.this.this.name,
+                    "function",
+                )
+                # The function expression is stored as a heredoc string.
+                # Reparse it to extract dependencies
+                assert isinstance(node.expression, exp.Heredoc)
+                fn_statements = sqlglot.parse(node.expression.this, read="postgres")
+                assert len(fn_statements) == 1
+                node = fn_statements[0]
+                assert node is not None
+                deps = list(node.find_all(exp.Table))
+                deps = [DBO(t.db, t.this.name, "relation") for t in deps]
+                deps = [dbo for dbo in deps if dbo != created]
+                deps = set(deps)
+                deps |= extract_user_defined_functions(node)
+                # Collect cte names
+                ctes = [c.args["alias"].name for c in node.find_all(exp.CTE)]
+                # Drop deps that are CTE's
+                # Assuming CTE's have no schema, just a name
+                deps = {d for d in deps if d.schema or d.name not in ctes}
+                # Functions are never temp
+                state.create(created, deps, temp=False)
+
             case exp.Drop():
                 dbo = DBO(
                     node.this.db,

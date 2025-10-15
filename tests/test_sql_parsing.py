@@ -119,3 +119,30 @@ def test_drop_then_create_rollback():
     r = analyze_sql_content(sql)
     assert r.created == set()
     assert r.dependencies == {DBO("", "dep", "relation")}
+
+
+def test_recursive_function():
+    sql = """
+    create or replace function sch.recursive_foo(_id integer)
+    returns table(
+        id integer
+    ) as
+    $$
+    with recursive traverse(id, fid) as (
+        select _id, rch.fid
+        from raw.dep d
+        where d.id = _id
+        union
+        select d.id, d.fid
+        from raw.dep d
+        join traverse on traverse.fid = d.nextfid
+    )
+    select id
+    from traverse
+    $$
+    language sql
+    immutable;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("sch", "recursive_foo", "function")}
+    assert r.dependencies == {DBO("raw", "dep", "relation")}
