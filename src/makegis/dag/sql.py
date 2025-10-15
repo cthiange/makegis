@@ -86,7 +86,7 @@ def analyze_sql_file(path: Path) -> SQLReport:
 def analyze_sql_content(sql: str) -> SQLReport:
     state = State()
 
-    statements = [s for s in sqlglot.parse(sql) if s is not None]
+    statements = [s for s in sqlglot.parse(sql, read="postgres") if s is not None]
 
     for ast in statements:
         # for node in ast.walk():
@@ -99,11 +99,20 @@ def analyze_sql_content(sql: str) -> SQLReport:
             case exp.Rollback():
                 state.rollback()
             case exp.Create():
-                created = DBO(
-                    node.this.db,
-                    node.this.name,
-                    "function" if node.kind == "FUNCTION" else "relation",
-                )
+                match node.this:
+                    case exp.UserDefinedFunction():
+                        created = DBO(
+                            node.this.this.db,
+                            node.this.this.name,
+                            "function",
+                        )
+                        node = node.expression
+                    case _:
+                        created = DBO(
+                            node.this.db,
+                            node.this.name,
+                            "function" if node.kind == "FUNCTION" else "relation",
+                        )
                 deps = list(node.find_all(exp.Table))
                 deps = [DBO(t.db, t.this.name, "relation") for t in deps]
                 deps = [dbo for dbo in deps if dbo != created]

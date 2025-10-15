@@ -62,3 +62,20 @@ def test_with_cte():
     r = analyze_sql_content(sql)
     assert r.created == {DBO("new", "table", "relation")}
     assert r.dependencies == {DBO("raw", "dep", "relation")}
+
+
+def test_create_function():
+    sql = """
+    create or replace function sch.foo(_id integer)
+    returns table(
+        id integer
+    ) as
+    $$
+        select _id + 1
+    $$
+    language sql
+    immutable;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("sch", "foo", "function")}
+    assert r.dependencies == set()
