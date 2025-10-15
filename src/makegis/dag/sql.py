@@ -67,9 +67,11 @@ class State:
 
     def drop(self, dbo: DBO):
         if self.tx:
-            self.tx_dels.add(dbo)
+            if dbo in self.tx_news:
+                self.tx_dels.add(dbo)
         else:
-            self.dels.add(dbo)
+            if dbo in self.news:
+                self.dels.add(dbo)
 
     def summary(self) -> SQLReport:
         assert self.tx is False

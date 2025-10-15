@@ -79,3 +79,43 @@ def test_create_function():
     r = analyze_sql_content(sql)
     assert r.created == {DBO("sch", "foo", "function")}
     assert r.dependencies == set()
+
+
+def test_drop_then_create():
+    sql = """
+    drop table foo;
+    create table foo as
+        select *
+        from dep;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("", "foo", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation")}
+
+
+def test_drop_then_create_commit():
+    sql = """
+    begin;
+    drop table foo;
+    create table foo as
+        select *
+        from dep;
+    commit;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("", "foo", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation")}
+
+
+def test_drop_then_create_rollback():
+    sql = """
+    begin;
+    drop table foo;
+    create table foo as
+        select *
+        from dep;
+    rollback;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == set()
+    assert r.dependencies == {DBO("", "dep", "relation")}
