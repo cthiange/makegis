@@ -72,6 +72,10 @@ class DAG:
 
         # Build node lookup
         self._nodes = {nc.id: nc for nc in nodes}
+        if len(self._nodes) != len(nodes):
+            # Report duplicated ids and exit
+            dupes = [node.id for node in nodes if node not in self._nodes.values()]
+            raise ValueError(f"Found non-unique node ids: {dupes}")
 
         # Register tables
         for node in nodes:

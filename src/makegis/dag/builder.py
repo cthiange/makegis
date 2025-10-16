@@ -111,7 +111,7 @@ def process_transform_block(
             for d in report.created
         }
         node = TransformNode(
-            id=f"{ctx.schema}{'.' + ctx.prefix if ctx.prefix else ''}",
+            id=f"{ctx.schema}.{ctx.prefix + '_' if ctx.prefix else ''}{t.path.stem}",
             deps=deps,
             owns=owns,
             transform=Transform(sql=contextualized_script_path),
