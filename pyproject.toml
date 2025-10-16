@@ -11,7 +11,7 @@ requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [{name = "Chris Thiange"}]
 
-dependencies = ["psycopg[binary]", "python-dotenv", "pyyaml"]
+dependencies = ["duckdb", "psycopg[binary]", "pydantic", "python-dotenv", "pyyaml", "sqlglot"]
 
 [project.scripts]
 mkgs = "makegis.cli:cli"
