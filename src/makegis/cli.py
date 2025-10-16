@@ -4,7 +4,6 @@ import logging
 
 import dotenv
 
-from .dag import DAG
 from .dag.builder import Builder
 from .config import RootConfig
 
