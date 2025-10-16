@@ -1,3 +1,4 @@
+import os
 import sys
 import subprocess
 from dataclasses import dataclass
@@ -112,7 +113,7 @@ class DAG:
             case SourceNode():
                 postgis.load_table(target, node.job)
             case TransformNode():
-                raise NotImplementedError
+                run_sql(target, node.transform.sql)
             case CustomNode():
                 n = len(node.prep)
                 for i, action in enumerate(node.prep, start=1):
@@ -186,3 +187,40 @@ def run_action(action: Path, i: int, n: int):
             print(f"prep ({i}/{n}) | {line}", end="")
 
     return process.wait()
+
+
+def run_sql(target: TargetConfig, path: Path):
+    assert path.suffix == ".sql"
+    psql = os.environ.get("MKGS_PSQL", "psql")
+    cmd = [
+        psql,
+        "-h",
+        target.host,
+        "-U",
+        target.user,
+        "-p",
+        str(target.port),
+        "-d",
+        target.db,
+        "-v",
+        "ON_ERROR_STOP=ON",
+        "-f",
+        path,
+    ]
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(f"transform ({path.name}) | {line}", end="")
+
+    ret = process.wait()
+
+    if ret != 0:
+        raise RuntimeError(f"error while running sql transform {path}")
