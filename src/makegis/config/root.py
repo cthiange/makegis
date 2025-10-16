@@ -15,6 +15,7 @@ from .utils import expand_dict_strings
 
 class RootDefaults(BaseModel):
     load: LoadDefaults = LoadDefaults()
+    target: str | None = None
 
 
 class TargetConfig(BaseModel):

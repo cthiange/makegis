@@ -5,6 +5,7 @@ defaults:
   load:
     epsg: 4326
     geom_index: false
+  target: pg_dev
 
 targets:
   pg_prod:

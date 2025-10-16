@@ -59,7 +59,12 @@ def check(args):
 def run(args):
     print("run...")
     cfg = load_root_config()
-    target = cfg.targets[args.target]
+
+    target_id = args.target or cfg.defaults.target
+    assert target_id is not None
+    print(f"debug - using target {target_id}")
+    target = cfg.targets[target_id]
+
     dag = Builder(cfg).build()
     dag.run(args.node, target)
 

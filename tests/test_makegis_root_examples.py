@@ -7,6 +7,7 @@ def test_root1():
     path = Path(__file__).parent.parent / Path("examples/makegis.root1.yml")
     c = RootConfig.from_file(path)
     assert isinstance(c, RootConfig)
+    assert c.defaults.target == "pg_dev"
 
 
 def test_root2():
