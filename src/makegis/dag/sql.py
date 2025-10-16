@@ -65,6 +65,12 @@ class State:
         else:
             self.news.add(created)
 
+    def insert(self, target: DBO, deps: Set[DBO]):
+        # If table wasn't created by this script, add it to the deps
+        if target not in self.news and target not in self.tx_news:
+            self.deps.add(target)
+        self.deps |= deps
+
     def drop(self, dbo: DBO):
         if self.tx:
             if dbo in self.tx_news:
@@ -101,13 +107,22 @@ def analyze_sql_content(sql: str) -> SQLReport:
             case exp.Rollback():
                 state.rollback()
 
-            case exp.Create(this=exp.Table()):
+            case exp.Create(this=exp.Table()) | exp.Create(this=exp.Schema()):
                 assert node.kind != "FUNCTION"
-                created = DBO(
-                    node.this.db,
-                    node.this.name,
-                    "relation",
-                )
+                if isinstance(node.this, exp.Table):
+                    created = DBO(
+                        node.this.db,
+                        node.this.name,
+                        "relation",
+                    )
+                elif isinstance(node.this, exp.Schema):
+                    created = DBO(
+                        node.this.this.db,
+                        node.this.this.name,
+                        "relation",
+                    )
+                else:
+                    raise NotImplementedError()
                 deps = list(node.find_all(exp.Table))
                 deps = [DBO(t.db, t.this.name, "relation") for t in deps]
                 deps = [dbo for dbo in deps if dbo != created]
@@ -152,6 +167,26 @@ def analyze_sql_content(sql: str) -> SQLReport:
                 deps = {d for d in deps if d.schema or d.name not in ctes}
                 # Functions are never temp
                 state.create(created, deps, temp=False)
+
+            case exp.Insert():
+                # Get target
+                assert isinstance(node.this, exp.Schema)
+                assert isinstance(node.this.this, exp.Table)
+                target_schema = node.this.this.db
+                target_table = node.this.this.this.this
+                target = DBO(target_schema, target_table, "relation")
+                # Get deps
+                node = node.expression
+                deps = list(node.find_all(exp.Table))
+                deps = [DBO(t.db, t.this.name, "relation") for t in deps]
+                deps = set(deps)
+                deps |= extract_user_defined_functions(node)
+                # Collect cte names
+                ctes = [c.args["alias"].name for c in node.find_all(exp.CTE)]
+                # Drop deps that are CTE's
+                # Assuming CTE's have no schema, just a name
+                deps = {d for d in deps if d.schema or d.name not in ctes}
+                state.insert(target, deps)
 
             case exp.Drop():
                 dbo = DBO(

@@ -146,3 +146,20 @@ def test_recursive_function():
     r = analyze_sql_content(sql)
     assert r.created == {DBO("sch", "recursive_foo", "function")}
     assert r.dependencies == {DBO("raw", "dep", "relation")}
+
+
+def test_create_then_insert():
+    sql = """
+    create table sch.tbl (
+        id integer primary key,
+        name text not null
+    );
+
+    insert into sch.tbl (id, name)
+    select fid
+        , title
+    from dep;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("sch", "tbl", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation")}
