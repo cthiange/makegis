@@ -209,5 +209,8 @@ def extract_user_defined_functions(ast) -> Set[DBO]:
                 schema = f.parent.this.name
             case _:
                 schema = ""
+        # Ignore postgis functions
+        if name.startswith("st_") and (schema == "" or schema == "public"):
+            continue
         functions.add(DBO(schema, name, "function"))
     return functions

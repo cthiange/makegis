@@ -163,3 +163,20 @@ def test_create_then_insert():
     r = analyze_sql_content(sql)
     assert r.created == {DBO("sch", "tbl", "relation")}
     assert r.dependencies == {DBO("", "dep", "relation")}
+
+
+def test_postgis_functions():
+    """
+    Postgis functions should not be listed as dependencies.
+    """
+    sql = """
+    create view some_view as
+        select id
+            , sum(public.st_area(geom)) as area
+            , st_union(geom) as geom
+        from dep
+        group by 1;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("", "some_view", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation")}
