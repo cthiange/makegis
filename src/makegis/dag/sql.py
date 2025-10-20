@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Set
 from typing import Literal
 from typing import NamedTuple
+import logging
 
 import sqlglot
 from sqlglot import exp
@@ -195,6 +196,9 @@ def analyze_sql_content(sql: str) -> SQLReport:
                     "function" if node.kind == "FUNCTION" else "relation",
                 )
                 state.drop(dbo)
+
+            case _:
+                logging.warning(f"Unhandled sql node type: {type(node)}")
 
     return state.summary()
 
