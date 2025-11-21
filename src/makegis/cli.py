@@ -4,12 +4,13 @@ import logging
 
 import dotenv
 
+from . import __version__
 from .dag.builder import Builder
 from .config import RootConfig
 
 
 def cli():
-    print("makegis 0.1.0")
+    print(f"makegis {__version__}")
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(
