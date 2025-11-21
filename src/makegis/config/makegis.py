@@ -34,7 +34,7 @@ class BaseSourceBlock(BaseModel):
 class EsriSourceBlock(BaseSourceBlock):
     type: Literal["esri"] = "esri"
     url: str
-    f: Literal["pjson", "pgeojson"]
+    f: Literal["pjson", "pgeojson"] = "pgeojson"
 
 
 class DuckDBSourceBlock(BaseSourceBlock):
