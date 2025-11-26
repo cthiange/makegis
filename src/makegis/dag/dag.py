@@ -16,6 +16,7 @@ from ..core.transforms import Transform
 from ..core.commands import Command
 from ..config import TargetConfig
 from .. import postgis
+from ..log import RunEvent
 
 
 class DatabaseObject(NamedTuple):
@@ -109,6 +110,7 @@ class DAG:
 
     def run(self, node_id: str, target: TargetConfig):
         node = self._nodes[node_id]
+        event = RunEvent(node_id).start()
         match node:
             case SourceNode():
                 postgis.load_table(target, node.job)
@@ -136,6 +138,7 @@ class DAG:
                         continue
                     print(f"error - cleanup {i}/{n} {action} failed")
                     raise RuntimeError("cleanup step failed")
+        event.log(target)
 
     def show(self, pattern: str):
         """

@@ -7,7 +7,7 @@ import dotenv
 from . import __version__
 from .dag.builder import Builder
 from .config import RootConfig
-
+from . import log
 
 def cli():
     print(f"makegis {__version__}")
@@ -20,6 +20,17 @@ def cli():
     parser.add_argument("-v", "--verbose", action="store_true")
 
     subparsers = parser.add_subparsers(help="subcommand help")
+
+    init_parser = subparsers.add_parser("init", help="initialize log tables on target")
+    init_parser.add_argument(
+        "-t",
+        "--target",
+        action="store",
+        type=str,
+        default=None,
+        help="db instance to target",
+    )
+    init_parser.set_defaults(func=init)
 
     run_parser = subparsers.add_parser("run", help="run help")
     run_parser.add_argument("node", type=str, help="node to run")
@@ -41,6 +52,8 @@ def cli():
     show_parser.add_argument("pattern", type=str, help="DAG selection pattern")
     show_parser.set_defaults(func=show)
 
+
+
     # Load .env
     dotenv.load_dotenv(".env")
 
@@ -54,6 +67,17 @@ def check(args):
     cfg = load_root_config()
     dag = Builder(cfg).build()
     dag.print()
+
+def init(args):
+    print("init...")
+    cfg = load_root_config()
+    target_id = args.target or cfg.defaults.target
+    assert target_id is not None
+    print(f"debug - using target {target_id}")
+    target = cfg.targets[target_id]
+
+    log.init_tables(target)
+
 
 
 def run(args):
