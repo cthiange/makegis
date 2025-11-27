@@ -205,8 +205,9 @@ def analyze_sql_content(sql: str) -> SQLReport:
 
 def extract_user_defined_functions(ast) -> Set[DBO]:
     functions = set()
-    # Built-in functions have an empty name
-    for f in [f for f in ast.find_all(exp.Func) if f.name]:
+    # Collect anonymous functions to exclude built-ins
+    for f in [f for f in ast.find_all(exp.Anonymous)]:
+        assert isinstance(f, exp.Func)
         name = f.name
         match f.parent:
             case exp.Dot():

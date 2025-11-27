@@ -165,6 +165,23 @@ def test_create_then_insert():
     assert r.dependencies == {DBO("", "dep", "relation")}
 
 
+def test_builtin_count_function():
+    """
+    Reproduce bug where count(*) is parsed as a user defined function.
+    """
+    sql = """
+    create view some_view as
+        select id
+            , count(id) as ids
+            , count(*) as stars
+        from dep
+        group by 1;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("", "some_view", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation")}
+
+
 def test_postgis_functions():
     """
     Postgis functions should not be listed as dependencies.
