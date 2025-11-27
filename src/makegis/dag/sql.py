@@ -72,6 +72,18 @@ class State:
             self.deps.add(target)
         self.deps |= deps
 
+    def alter(self, target: DBO):
+        # Ensure this table was created by this script.
+        if target not in self.news and target not in self.tx_news:
+            raise NotImplementedError("Altering existing tables not supported yet")
+
+    def update(self, target: DBO, deps: Set[DBO]):
+        # Ensure this table was created by this script.
+        if target not in self.news and target not in self.tx_news:
+            raise NotImplementedError("Updating existing tables not supported yet")
+        # Add deps
+        self.deps |= deps
+
     def drop(self, dbo: DBO):
         if self.tx:
             if dbo in self.tx_news:
@@ -197,8 +209,43 @@ def analyze_sql_content(sql: str) -> SQLReport:
                 )
                 state.drop(dbo)
 
+            case exp.Create(this=exp.Index()):
+                pass
+
+            case exp.Alter(this=exp.Table()):
+                target = DBO(
+                    node.this.db,
+                    node.this.name,
+                    "relation",
+                )
+                state.alter(target)
+
+            case exp.Update(this=exp.Table()):
+                target = DBO(
+                    node.this.db,
+                    node.this.name,
+                    "relation",
+                )
+                # Get deps
+                deps = list(node.find_all(exp.Table))
+                deps = [DBO(t.db, t.this.name, "relation") for t in deps]
+                deps = [dbo for dbo in deps if dbo != target]
+                deps = set(deps)
+                deps |= extract_user_defined_functions(node)
+                # Collect cte names
+                ctes = [c.args["alias"].name for c in node.find_all(exp.CTE)]
+                # Drop deps that are CTE's
+                # Assuming CTE's have no schema, just a name
+                deps = {d for d in deps if d.schema or d.name not in ctes}
+                state.update(target, deps)
+
+            case exp.Set():
+                pass
+
             case _:
                 logging.warning(f"Unhandled sql node type: {type(node)}")
+                print(node)
+                print()
 
     return state.summary()
 

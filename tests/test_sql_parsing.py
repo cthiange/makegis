@@ -1,3 +1,5 @@
+import pytest
+
 from makegis.dag.sql import analyze_sql_content
 from makegis.dag.sql import DBO
 
@@ -79,6 +81,58 @@ def test_create_function():
     r = analyze_sql_content(sql)
     assert r.created == {DBO("sch", "foo", "function")}
     assert r.dependencies == set()
+
+
+def test_create_index():
+    sql = """
+    -- index creation has no impact
+    create index on some_table using gist(geom);
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == set()
+    assert r.dependencies == set()
+
+
+def test_alter_owned_table():
+    sql = """
+    create table foo as
+        select *
+        from dep;
+    alter table foo add primary key(id);
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("", "foo", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation")}
+
+
+def test_alter_existing_table_raises_error():
+    sql = """
+    alter table foo add primary key(id);
+    """
+    with pytest.raises(NotImplementedError):
+        r = analyze_sql_content(sql)
+
+
+def test_update_owned_table():
+    sql = """
+    create table foo as
+        select *
+        from dep;
+    update foo set col = 0
+    from other_dep
+    where other_dep.id = foo.id;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("", "foo", "relation")}
+    assert r.dependencies == {DBO("", "dep", "relation"), DBO("", "other_dep", "relation")}
+
+
+def test_update_existing_table_raises_error():
+    sql = """
+    update table foo set col = 0;
+    """
+    with pytest.raises(NotImplementedError):
+        r = analyze_sql_content(sql)
 
 
 def test_drop_then_create():
