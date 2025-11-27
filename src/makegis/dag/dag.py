@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import subprocess
 from dataclasses import dataclass
@@ -188,8 +189,63 @@ class DAG:
 
         Usefull to test out selection patterns.
         """
-        node = self._nodes[pattern]
-        print_node(node)
+        node_ids = self.select_nodes(pattern)
+
+        if not node_ids:
+            print(f"no nodes matching pattern '{pattern}'")
+            return
+
+        for nid in node_ids:
+            print_node(self._nodes[nid])
+
+    def select_nodes(self, pattern) -> List[str]:
+        """
+        Get list of topologically sorted node ids matching given selection pattern.
+
+        Pattern syntax:
+
+            - `node*`   select all nodes starting with `node`
+
+        Todo:
+            - `node+`   select node and all descendants
+            - `+node`   select node and all ancestors
+            - `node+1`  select node and its 1st degree descendants
+            - `2+node`  select node and its 1st and 2nd degree ancestors
+        """
+        # Default graph propagation flags  
+        upstream = False
+        downstream = False
+
+        search = pattern
+        if pattern.startswith("+"):
+            upstream = True
+            search = search[1:]
+        if pattern.endswith("+"):
+            downstream = True
+            search = search[:-1]
+        if "+" in search:
+            raise ValueError("The '+' graph operator can only be used at the start and end of a selectio pattern")
+
+        # Convert search term to equivalent regex
+        search = re.escape(search).replace("\\*", ".*")
+        search = f"^{search}$"
+        p = re.compile(search)
+
+        # Collect nodes matching by name pattern
+        selection = set()
+        for node_id in self._nodes:
+            if re.match(p, node_id):
+                selection.add(node_id)
+
+        # Collect upstream and downstream nodes if needed
+        if upstream or downstream:
+            raise NotImplementedError("The `+` graph selection operator is not supported yet")
+
+        # Sort nodes topologically
+        ts = graphlib.TopologicalSorter(self._graph)
+        selection = [nid for nid  in ts.static_order() if nid in selection]
+
+        return selection
 
 
 def print_node(node: Node):
