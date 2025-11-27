@@ -32,6 +32,18 @@ def cli():
     )
     init_parser.set_defaults(func=init)
 
+
+    outdated_parser = subparsers.add_parser("outdated", help="list outdated nodes")
+    outdated_parser.add_argument(
+        "-t",
+        "--target",
+        action="store",
+        type=str,
+        default=None,
+        help="db instance to target",
+    )
+    outdated_parser.set_defaults(func=outdated)
+
     run_parser = subparsers.add_parser("run", help="run help")
     run_parser.add_argument("node", type=str, help="node to run")
     run_parser.add_argument(
@@ -51,7 +63,6 @@ def cli():
     show_parser = subparsers.add_parser("show", help="show help")
     show_parser.add_argument("pattern", type=str, help="DAG selection pattern")
     show_parser.set_defaults(func=show)
-
 
 
     # Load .env
@@ -78,7 +89,16 @@ def init(args):
 
     log.init_tables(target)
 
+def outdated(args):
+    print("outdated...")
+    cfg = load_root_config()
+    target_id = args.target or cfg.defaults.target
+    assert target_id is not None
+    print(f"debug - using target {target_id}")
+    target = cfg.targets[target_id]
 
+    dag = Builder(cfg).build()
+    dag.show_outdated(target)
 
 def run(args):
     print("run...")

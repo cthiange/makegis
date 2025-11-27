@@ -16,7 +16,7 @@ from ..core.transforms import Transform
 from ..core.commands import Command
 from ..config import TargetConfig
 from .. import postgis
-from ..log import RunEvent
+from .. import log
 
 
 class DatabaseObject(NamedTuple):
@@ -69,7 +69,7 @@ class DAG:
         self._nodes: Dict[str, Node] = {}
         # Database object to node lookup
         self._dbo2node: Dict[DatabaseObject, Node] = {}
-        # DAG graph
+        # DAG graph - maps node id to parent node ids
         self._graph: Dict[str, Set[str]] = {}
 
         # Build node lookup
@@ -110,7 +110,7 @@ class DAG:
 
     def run(self, node_id: str, target: TargetConfig):
         node = self._nodes[node_id]
-        event = RunEvent(node_id).start()
+        event = log.RunEvent(node_id).start()
         match node:
             case SourceNode():
                 postgis.load_table(target, node.job)
@@ -139,6 +139,48 @@ class DAG:
                     print(f"error - cleanup {i}/{n} {action} failed")
                     raise RuntimeError("cleanup step failed")
         event.log(target)
+
+    def get_outdated(self, target: TargetConfig) -> List[str]:
+        """Get ids of outdated nodes"""
+        manifest = log.fetch_manifest(target)
+
+        # Collects ids of missing or outdated nodes
+        outdated = set()
+
+        ts = graphlib.TopologicalSorter(self._graph)
+        node_ids = tuple(ts.static_order())
+        for node_id in node_ids:
+            # Nodes not in manifest have never been run, and thus outdated.
+            if node_id not in manifest:
+                outdated.add(node_id)
+                continue
+            # Any node with an outdated parent is itself outdated.
+            # Outdated parents are guaranteed to have been detected at this point
+            # because we are iterating over nodes in topological order.
+            parent_ids = self._graph[node_id]
+            if any([pid in outdated for pid in parent_ids]):
+                outdated.add(node_id)
+                continue
+            # Finally, if timestamp of at least one dependency is missing or more recent
+            # than the node's own timestamp, then the node is outdated.
+            node_ts = manifest[node_id]
+            for pid in parent_ids:
+                if pid not in manifest or node_ts < manifest[pid]:
+                    outdated.add(node_id)
+
+        return list(outdated)
+
+    def show_outdated(self, target: TargetConfig):
+        """Print ids of outdated nodes"""
+        outdated = self.get_outdated(target)
+        # Print outdated node ids sorted alphabetically
+        outdated.sort()
+        print("Outdated nodes:")
+        for node_id in outdated:
+            print(f"  {node_id}")
+        print(f"Number of outdated nodes: {len(outdated)}")
+
+        
 
     def show(self, pattern: str):
         """

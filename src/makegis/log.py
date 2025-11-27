@@ -3,6 +3,7 @@ from datetime import datetime
 from datetime import timezone
 import platform
 import subprocess
+from typing import Dict
 from typing import Self
 
 import psycopg
@@ -99,3 +100,18 @@ def log_run(target: TargetConfig, record: RunRecord):
                 record.repo_hash
             )
         )
+
+
+def fetch_manifest(target: TargetConfig) -> Dict[str,datetime]:
+    with psycopg.connect(target.conn_str()) as conn:
+        rows = conn.execute(
+            """
+            select node_id
+                , max(completed) as last_run_utc
+            from _makegis_runs
+            group by 1;
+            """
+        ).fetchall()
+        # Map node ids to timestamp coverted from utc to local.
+        return {row[0]: row[1].replace(tzinfo=timezone.utc).astimezone() for row in rows}
+
