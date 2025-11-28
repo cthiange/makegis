@@ -66,6 +66,19 @@ def test_with_cte():
     assert r.dependencies == {DBO("raw", "dep", "relation")}
 
 
+def test_view_from_existing_dependency():
+    sql = """
+    create view new.view as
+        with some_dep as (
+            select * from raw.dep
+        )
+        select * from some_dep;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == {DBO("new", "view", "relation")}
+    assert r.dependencies == {DBO("raw", "dep", "relation")}
+
+
 def test_create_function():
     sql = """
     create or replace function sch.foo(_id integer)
