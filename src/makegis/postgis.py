@@ -28,7 +28,7 @@ def load_table(target: TargetConfig, job: LoadJob):
                     load_gdb(target.conn_uri(), job.src, job.dst)
                 case _:
                     raise NotImplementedError(
-                        f"Loading {job.src.path.suffix} files is not supprted yet"
+                        f"Loading {job.src.path.suffix} files is not supported yet"
                     )
         case _:
             raise NotImplementedError
