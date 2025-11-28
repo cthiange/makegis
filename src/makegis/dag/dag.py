@@ -109,7 +109,36 @@ class DAG:
             for dbo in node.owns:
                 print(f"\t{dbo.full_name}")
 
-    def run(self, node_id: str, target: TargetConfig):
+    def run(self, pattern: str, target: TargetConfig, force=False):
+        """
+        Run nodes selected by pattern.
+
+        By default, will only run nodes that are outdated.
+        Use `force=True` to override.
+
+        force: run nodes even when not outdated
+        """
+        node_ids = self.select_nodes(pattern)
+
+        if not node_ids:
+            print(f"no nodes matching pattern '{pattern}'")
+            return
+
+        if force:
+            outdated = set(node_ids)
+        else:
+            outdated = set(self.get_outdated(target))
+
+        nb_nodes = len(node_ids)
+        for i, nid in enumerate(node_ids):
+            if nid in outdated:
+                print(f"{i+1}/{nb_nodes} running node {nid}")
+                self.run_node(nid, target)
+            else:
+                print(f"{i+1}/{nb_nodes} skipping node {nid} (not stale)")
+
+
+    def run_node(self, node_id: str, target: TargetConfig):
         node = self._nodes[node_id]
         event = log.RunEvent(node_id).start()
         match node:

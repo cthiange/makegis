@@ -54,6 +54,11 @@ def cli():
         default=None,
         help="db instance to target",
     )
+    run_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="also run fresh nodes",
+    )
     run_parser.set_defaults(func=run)
 
     check_parser = subparsers.add_parser("check", help="check help")
@@ -110,7 +115,7 @@ def run(args):
     target = cfg.targets[target_id]
 
     dag = Builder(cfg).build()
-    dag.run(args.node, target)
+    dag.run(args.node, target, force=args.force)
 
 
 def show(args):
