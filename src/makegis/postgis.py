@@ -301,7 +301,7 @@ def load_wfs(
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
     if src.epsg is not None:
-        options += f" -s_src EPSG:{src.epsg}"
+        options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
@@ -338,7 +338,7 @@ def load_gdb(
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
     if src.epsg is not None:
-        options += f" -s_src EPSG:{src.epsg}"
+        options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
@@ -374,7 +374,7 @@ def load_shp(
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
     if src.epsg is not None:
-        options += f" -s_src EPSG:{src.epsg}"
+        options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
@@ -412,7 +412,7 @@ def load_esri(
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
     if src.epsg is not None:
-        options += f" -s_src EPSG:{src.epsg}"
+        options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
