@@ -26,6 +26,8 @@ def load_table(target: TargetConfig, job: LoadJob):
             match job.src.path.suffix:
                 case ".gdb":
                     load_gdb(target.conn_uri(), job.src, job.dst)
+                case ".shp":
+                    load_shp(target.conn_uri(), job.src, job.dst)
                 case _:
                     raise NotImplementedError(
                         f"Loading {job.src.path.suffix} files is not supported yet"
@@ -352,6 +354,44 @@ def load_gdb(
     if ret != 0:
         print(f"error - loading gdb failed with code ({ret})")
         raise RuntimeError("loading gdb layer failed")
+
+
+def load_shp(
+    conn_str: str,
+    src: FileSource,
+    dst: Destination,
+):
+    """
+    Uses local ogr2ogr executable.
+    """
+    ogr2ogr = r"ogr2ogr.exe"
+    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    cmd += f' "{src.path}" '
+    options = ""
+    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += f" -lco FID={'gid' if src.pk is None else src.pk}"
+    options += " -progress"
+    if dst.geom_column is not None:
+        options += f" -lco GEOMETRY_NAME={dst.geom_column}"
+    if src.epsg is not None:
+        options += f" -s_src EPSG:{src.epsg}"
+    if dst.epsg is not None:
+        options += f" -t_srs EPSG:{dst.epsg}"
+    options += " --config OGR_PG_ENABLE_METADATA=NO"
+    options += " -overwrite"
+    options += " -nlt PROMOTE_TO_MULTI"
+    if dst.geom_index:
+        options += " -lco SPATIAL_INDEX=GIST"
+    else:
+        options += " -lco SPATIAL_INDEX=NONE"
+    cmd += options
+
+    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    print(f"debug - return code: {ret}")
+    if ret != 0:
+        print(f"error - loading shp failed with code ({ret})")
+        raise RuntimeError("loading shp layer failed")
+
 
 
 def load_esri(
