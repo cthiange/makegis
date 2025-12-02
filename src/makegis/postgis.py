@@ -421,6 +421,8 @@ def load_esri(
         options += " -lco SPATIAL_INDEX=GIST"
     else:
         options += " -lco SPATIAL_INDEX=NONE"
+    # Seems to be used anyways but including to be explicit
+    options += " -oo FEATURE_SERVER_PAGING=YES"
     cmd += options
 
     ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
