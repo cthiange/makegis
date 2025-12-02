@@ -393,7 +393,6 @@ def load_shp(
         raise RuntimeError("loading shp layer failed")
 
 
-
 def load_esri(
     conn_str: str,
     src: EsriSource,
