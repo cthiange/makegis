@@ -416,6 +416,7 @@ def load_esri(
         options += f" -t_srs EPSG:{dst.epsg}"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
     options += " -overwrite"
+    options += " -nlt PROMOTE_TO_MULTI"
     if dst.geom_index:
         options += " -lco SPATIAL_INDEX=GIST"
     else:
