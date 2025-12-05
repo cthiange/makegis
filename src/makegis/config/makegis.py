@@ -31,6 +31,15 @@ class BaseSourceBlock(BaseModel):
     pk: str | None = None
 
 
+class CSVSourceBlock(BaseSourceBlock):
+    type: Literal["csv"] = "csv"
+    path: Path
+    # TODO:
+    # x_column: str | None = None
+    # y_column: str | None = None
+    # keep_xy_columns: bool = False
+
+
 class EsriSourceBlock(BaseSourceBlock):
     type: Literal["esri"] = "esri"
     url: str
@@ -48,15 +57,14 @@ class FileSourceBlock(BaseSourceBlock):
     path: Path
     layer: str | None = None
 
-
 class WFSSourceBlock(BaseSourceBlock):
     type: Literal["wfs"] = "wfs"
     url: str
 
 
-type SourceBlock = EsriSourceBlock | DuckDBSourceBlock | FileSourceBlock | WFSSourceBlock
+type SourceBlock = CSVSourceBlock | EsriSourceBlock | DuckDBSourceBlock | FileSourceBlock | WFSSourceBlock
 
-SOURCE_KEYS = set(["esri", "duckdb", "file", "wfs"])
+SOURCE_KEYS = set(["csv", "esri", "duckdb", "file", "wfs"])
 
 
 class LoadItem(BaseModel):
@@ -77,7 +85,10 @@ class LoadItem(BaseModel):
             raise RuntimeError(
                 f"Too many source keys in load block item, expecting exactly one of {SOURCE_KEYS}"
             )
-        if "esri" in matched_source_keys:
+        if "csv" in matched_source_keys:
+            path = v.pop("csv")
+            src = CSVSourceBlock(path=path, **v)
+        elif "esri" in matched_source_keys:
             url = v.pop("esri")
             src = EsriSourceBlock(url=url, **v)
         elif "duckdb" in matched_source_keys:

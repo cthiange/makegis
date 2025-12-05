@@ -12,6 +12,11 @@ class BaseSource:
 
 
 @dataclass(frozen=True)
+class CSVSource(BaseSource):
+    path: Path
+
+
+@dataclass(frozen=True)
 class EsriSource(BaseSource):
     url: str
     f: Literal["pgeojson", "pjson"]

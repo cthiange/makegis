@@ -16,6 +16,7 @@ from ..config.makegis import LoadItem
 from ..config.makegis import DatabaseItem
 from ..core.load import Destination
 from ..core.load import LoadJob
+from ..core.load import CSVSource
 from ..core.load import EsriSource
 from ..core.load import DuckDBSource
 from ..core.load import FileSource
@@ -226,7 +227,13 @@ def prepare_load_job(
     )
     # Source
     settings = {"epsg": src_epsg}
-    if item.src.type == "esri":
+    if item.src.type == "csv":
+        src = CSVSource(
+            path=ctx.resolve_path(item.src.path),
+            pk=item.src.pk,
+            **settings,
+        )
+    elif item.src.type == "esri":
         src = EsriSource(url=item.src.url, f=item.src.f, pk=item.src.pk, **settings)
     elif item.src.type == "duckdb":
         assert item.src.pk is None, "explicit pk not implemented for duckdb source"

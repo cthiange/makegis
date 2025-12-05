@@ -7,6 +7,7 @@ from psycopg import sql
 
 from .config import TargetConfig
 from .core.load import LoadJob
+from .core.load import CSVSource
 from .core.load import EsriSource
 from .core.load import DuckDBSource
 from .core.load import WFSSource
@@ -16,6 +17,8 @@ from .core.load import Destination
 
 def load_table(target: TargetConfig, job: LoadJob):
     match job.src:
+        case CSVSource():
+            load_csv(target.conn_str(), job.src, job.dst)
         case EsriSource():
             load_esri(target.conn_uri(), job.src, job.dst)
         case DuckDBSource():
@@ -282,6 +285,26 @@ def _column_has_index(
     )
     rows = conn.execute(qry).fetchall()
     return len(rows) > 0
+
+
+def load_csv(
+    conn_str: str,
+    src: FileSource,
+    dst: Destination,
+):
+    db = duckdb.connect()
+    db.sql(f"attach '{conn_str}' as pg (TYPE postgres);")
+    db.sql(
+        f"""
+        create or replace table pg.{dst.schema}.{dst.table} as
+            select * from '{src.path}';
+        """
+    )
+    db.close()
+
+    with psycopg.connect(conn_str) as conn:
+        if src.pk is not None:
+            conn.execute(f"alter table {dst.schema}.{dst.table} add primary key ({src.pk})")
 
 
 def load_wfs(
