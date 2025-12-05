@@ -40,6 +40,14 @@ class MakeGISFileContext:
     # Actual path to file
     path: Path
 
+    def resolve_path(self, path: Path) -> Path:
+        """Contextualize and resolve given path"""
+        path = path.expanduser()
+        if not path.is_absolute():
+            # Add context to relative path
+            path = self.path.parent / path
+        return path.resolve()
+
 
 @dataclass(frozen=True)
 class MakeGISFile:
@@ -230,7 +238,7 @@ def prepare_load_job(
         )
     elif item.src.type == "file":
         src = FileSource(
-            path=item.src.path,
+            path=ctx.resolve_path(item.src.path),
             layer=item.src.layer,
             pk=item.src.pk,
             **settings,
