@@ -3,6 +3,10 @@ from pathlib import Path
 from makegis.config.makegis import MakeGISConfig
 from makegis.config.makegis import LoadBlock
 from makegis.config.makegis import DuckDBSourceBlock
+from makegis.config.makegis import FileSourceBlock
+from makegis.config.makegis import EsriSourceBlock
+from makegis.config.makegis import WFSSourceBlock
+from makegis.config.makegis import RasterSourceBlock
 from makegis.config.makegis import TransformBlock
 from makegis.config.makegis import SQLTransform
 from makegis.config.makegis import NodeBlock
@@ -16,7 +20,12 @@ def test_load():
     assert m.block.defaults.epsg == 4326
     assert isinstance(m.block.items[0].src, DuckDBSourceBlock)
     assert isinstance(m.block.items[1].src, DuckDBSourceBlock)
+    assert isinstance(m.block.items[2].src, FileSourceBlock)
+    assert isinstance(m.block.items[3].src, WFSSourceBlock)
+    assert isinstance(m.block.items[4].src, EsriSourceBlock)
+    assert isinstance(m.block.items[5].src, RasterSourceBlock)
     assert m.block.items[1].src.table == "not_table_2"
+    assert m.block.items[5].src.tile_size == 512
 
 
 def test_transform():

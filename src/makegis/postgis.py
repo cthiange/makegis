@@ -12,6 +12,7 @@ from .core.load import EsriSource
 from .core.load import DuckDBSource
 from .core.load import WFSSource
 from .core.load import FileSource
+from .core.load import RasterSource
 from .core.load import Destination
 
 
@@ -35,6 +36,8 @@ def load_table(target: TargetConfig, job: LoadJob):
                     raise NotImplementedError(
                         f"Loading {job.src.path.suffix} files is not supported yet"
                     )
+        case RasterSource():
+            raster2pgsql(target, job.src, job.dst)
         case _:
             raise NotImplementedError
 
@@ -474,6 +477,54 @@ def run_ogr_cmd(cmd: str, label: str) -> int:
         shell=shell,
     )
 
+    if process.stdout is not None:
+        for line in process.stdout:
+            print(f"load ({label}) | {line}", end="")
+
+    return process.wait()
+
+
+def raster2pgsql(
+    target: TargetConfig,
+    src: EsriSource,
+    dst: Destination,
+):
+    psql = os.environ.get("MKGS_PSQL", "psql")
+    r2p = os.environ.get("MKGS_RASTER2PGSQL", "raster2pgsql")
+
+    # raster2pgsql options
+    # -f: explicit raster column name
+    # -d: drop table and recreate it
+    options = f"-f {dst.raster_column} -d"
+
+    # Add tile size
+    assert dst.tile_size is not None
+    t = dst.tile_size
+    options += f" -t {t}x{t}"
+
+    if dst.epsg is not None:
+        options += f" -s {dst.epsg}"
+
+    if dst.raster_index:
+        options += " -I"
+
+    if dst.raster_constraints:
+        options += " -C"
+
+    # Pipe raster2pgsql output to psql
+    cmd = f"{r2p} {options} {src.path} {dst.schema}.{dst.table} | {psql} -h {target.host} -p {target.port} -d {target.db} -U {target.user}"
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        shell=False,
+    )
+
+
+    label = f"{dst.schema}.{dst.table}"
     if process.stdout is not None:
         for line in process.stdout:
             print(f"load ({label}) | {line}", end="")

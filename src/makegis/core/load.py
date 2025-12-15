@@ -38,6 +38,11 @@ class FileSource(BaseSource):
 
 
 @dataclass(frozen=True)
+class RasterSource(BaseSource):
+    path: Path
+
+
+@dataclass(frozen=True)
 class WFSSource(BaseSource):
     url: str
 
@@ -56,6 +61,14 @@ class Destination:
     # Wether to index geometries or not.
     # Defaults to False to be conservative.
     geom_index: bool
+    # Name to assign to raster column.
+    raster_column: str
+    # Wether to index raster bounds
+    raster_index: bool
+    # Wether to set the standard set of raster constraints
+    raster_constraints: bool
+    # Raster tile size
+    tile_size: int | None
 
 
 @dataclass(frozen=True)

@@ -21,17 +21,24 @@ class LoadDefaults(BaseModel):
     epsg: int | str | None = None
     geom_index: bool | None = None
     geom_column: str | None = None
+    raster_index: bool | None = None
+    raster_column: str | None = None
+    raster_constraints: bool | None = None
+    tile_size: int | None = None
 
 
 class BaseSourceBlock(BaseModel):
     epsg: int | str | None = None
-    geom_index: bool | None = None
-    geom_column: str | None = None
     # Name of column to use as primary key
     pk: str | None = None
 
 
-class CSVSourceBlock(BaseSourceBlock):
+class VectorSourceBlock(BaseModel):
+    geom_index: bool | None = None
+    geom_column: str | None = None
+
+
+class CSVSourceBlock(BaseSourceBlock, VectorSourceBlock):
     type: Literal["csv"] = "csv"
     path: Path
     # TODO:
@@ -40,31 +47,39 @@ class CSVSourceBlock(BaseSourceBlock):
     # keep_xy_columns: bool = False
 
 
-class EsriSourceBlock(BaseSourceBlock):
+class EsriSourceBlock(BaseSourceBlock, VectorSourceBlock):
     type: Literal["esri"] = "esri"
     url: str
     f: Literal["pjson", "pgeojson"] = "pjson"
 
 
-class DuckDBSourceBlock(BaseSourceBlock):
+class DuckDBSourceBlock(BaseSourceBlock, VectorSourceBlock):
     type: Literal["duckdb"] = "duckdb"
     path: Path
     table: Optional[str] = None
 
 
-class FileSourceBlock(BaseSourceBlock):
+class FileSourceBlock(BaseSourceBlock, VectorSourceBlock):
     type: Literal["file"] = "file"
     path: Path
     layer: str | None = None
 
-class WFSSourceBlock(BaseSourceBlock):
+class RasterSourceBlock(BaseSourceBlock):
+    type: Literal["raster"] = "raster"
+    path: Path
+    raster_index: bool | None = None
+    raster_column: str | None = None
+    raster_constraints: bool | None = None
+    tile_size: int | None = None
+
+class WFSSourceBlock(BaseSourceBlock, VectorSourceBlock):
     type: Literal["wfs"] = "wfs"
     url: str
 
 
-type SourceBlock = CSVSourceBlock | EsriSourceBlock | DuckDBSourceBlock | FileSourceBlock | WFSSourceBlock
+type SourceBlock = CSVSourceBlock | EsriSourceBlock | DuckDBSourceBlock | FileSourceBlock | RasterSourceBlock | WFSSourceBlock
 
-SOURCE_KEYS = set(["csv", "esri", "duckdb", "file", "wfs"])
+SOURCE_KEYS = set(["csv", "esri", "duckdb", "file", "raster", "wfs"])
 
 
 class LoadItem(BaseModel):
@@ -97,6 +112,9 @@ class LoadItem(BaseModel):
         elif "file" in matched_source_keys:
             path = v.pop("file")
             src = FileSourceBlock(path=path, **v)
+        elif "raster" in matched_source_keys:
+            path = v.pop("raster")
+            src = RasterSourceBlock(path=path, **v)
         elif "wfs" in matched_source_keys:
             url = v.pop("wfs")
             src = WFSSourceBlock(url=url, **v)

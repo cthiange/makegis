@@ -21,3 +21,7 @@ load:
 
   table_5:
     esri: https://services3.arcgis.com/example/dummy/rest/services/test/FeatureServer/0
+
+  table_raster_512:
+    raster: local.tiff
+    tile_size: 512

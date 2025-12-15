@@ -20,6 +20,7 @@ from ..core.load import CSVSource
 from ..core.load import EsriSource
 from ..core.load import DuckDBSource
 from ..core.load import FileSource
+from ..core.load import RasterSource
 from ..core.load import WFSSource
 from ..core.transforms import Transform
 from ..core.commands import Command
@@ -224,6 +225,10 @@ def prepare_load_job(
         epsg=dst_epsg,
         geom_index=dh.geom_index(item.src),
         geom_column=dh.geom_column(item.src),
+        raster_index=dh.raster_index(item.src),
+        raster_column=dh.raster_column(item.src),
+        raster_constraints=dh.raster_constraints(item.src),
+        tile_size=dh.tile_size(item.src),
     )
     # Source
     settings = {"epsg": src_epsg}
@@ -250,6 +255,12 @@ def prepare_load_job(
             pk=item.src.pk,
             **settings,
         )
+    elif item.src.type == "raster":
+        src = RasterSource(
+            path=ctx.resolve_path(item.src.path),
+            pk=item.src.pk,
+            **settings,
+        )
     elif item.src.type == "wfs":
         src = WFSSource(url=item.src.url, pk=item.src.pk, **settings)
     else:
@@ -272,6 +283,18 @@ class LoadDefaultHandler:
     def geom_column(self, src: SourceBlock) -> str | None:
         return self._fallback(src, "geom_column")
 
+    def raster_index(self, src: SourceBlock) -> bool:
+        return self._fallback(src, "raster_index")
+
+    def raster_column(self, src: SourceBlock) -> str | None:
+        return self._fallback(src, "raster_column")
+
+    def raster_constraints(self, src: SourceBlock) -> str | None:
+        return self._fallback(src, "raster_constraints")
+    
+    def tile_size(self, src: SourceBlock) -> str | None:
+        return self._fallback(src, "tile_size")
+    
     def _fallback(self, src: SourceBlock, key: str):
         if key in src.model_fields_set:
             return getattr(src, key)
