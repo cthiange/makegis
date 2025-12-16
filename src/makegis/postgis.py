@@ -493,40 +493,60 @@ def raster2pgsql(
     r2p = os.environ.get("MKGS_RASTER2PGSQL", "raster2pgsql")
 
     # raster2pgsql options
+    options = []
+
     # -f: explicit raster column name
+    options += ["-f", dst.raster_column]
+
     # -d: drop table and recreate it
-    options = f"-f {dst.raster_column} -d"
+    options += ["-d"]
 
     # Add tile size
     assert dst.tile_size is not None
     t = dst.tile_size
-    options += f" -t {t}x{t}"
+    options += ["-t", f"{t}x{t}"]
 
     if dst.epsg is not None:
-        options += f" -s {dst.epsg}"
+        options += ["-s", str(dst.epsg)]
 
     if dst.raster_index:
-        options += " -I"
+        options += ["-I"]
 
     if dst.raster_constraints:
-        options += " -C"
+        options += ["-C"]
+
+
+    r2p_cmd = [r2p] + options + [src.path, f"{dst.schema}.{dst.table}"]
+
+    psql_cmd = [psql, "-h", target.host, "-p", str(target.port), "-d", target.db, "-U", target.user]
+
+
+    r2p_process = subprocess.Popen(r2p_cmd)
 
     # Pipe raster2pgsql output to psql
-    cmd = f"{r2p} {options} {src.path} {dst.schema}.{dst.table} | {psql} -h {target.host} -p {target.port} -d {target.db} -U {target.user}"
-
-    process = subprocess.Popen(
-        cmd,
+    psql_process = subprocess.Popen(
+        psql_cmd,
+        stdin=r2p_process.stdout,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        shell=False,
     )
 
-
     label = f"{dst.schema}.{dst.table}"
-    if process.stdout is not None:
-        for line in process.stdout:
+    if psql_process.stdout is not None:
+        for line in psql_process.stdout:
             print(f"load ({label}) | {line}", end="")
 
-    return process.wait()
+    ret = r2p_process.wait()
+    print(f"debug - raster2pgsql return code: {ret}")
+    if ret != 0: 
+        print(f"error - loading raster (raster2pgsql) failed with code ({ret})")
+        raise RuntimeError("loading raster failed")
+
+    ret = psql_process.wait()
+    print(f"debug - psql return code: {ret}")
+    if ret != 0: 
+        print(f"error - loading raster (psql) failed with code ({ret})")
+        raise RuntimeError("loading raster failed")
+
