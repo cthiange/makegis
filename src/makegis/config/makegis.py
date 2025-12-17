@@ -156,7 +156,7 @@ class DatabaseItem(BaseModel):
     def from_dict(cls, d: Dict):
         assert (
             len(d) == 1
-        ), "each item in a 'creates' block must have exactly 1 key e.g. - table: name"
+        ), "each item in a 'creates' or 'deps' block must have exactly 1 key e.g. - table: name"
         k, v = next(iter(d.items()))
         return DatabaseItem(type=k, name=v)
 
@@ -206,9 +206,9 @@ class NodeBlock(BaseModel):
 
     @classmethod
     def from_dict(cls, d: Dict):
-        deps = [DatabaseItem.from_dict(d) for d in d.pop("deps", []) or []]
+        deps = [DatabaseItem.from_dict(d) for d in d.pop("deps", [])]
         do = DoBlock.from_dict(d.pop("do"))
-        return NodeBlock(do=do, **d)
+        return NodeBlock(deps=deps, do=do, **d)
 
 
 class MakeGISConfig(BaseModel):

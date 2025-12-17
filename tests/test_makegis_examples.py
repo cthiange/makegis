@@ -10,6 +10,7 @@ from makegis.config.makegis import RasterSourceBlock
 from makegis.config.makegis import TransformBlock
 from makegis.config.makegis import SQLTransform
 from makegis.config.makegis import NodeBlock
+from makegis.config.makegis import DatabaseItem
 
 
 def test_load():
@@ -43,6 +44,7 @@ def test_node():
     assert isinstance(m.block, NodeBlock)
     assert m.type == "node"
     b = m.block
+    assert b.deps == [DatabaseItem(name="raw.upstream_table", type="table")]
     assert b.prep is not None
     assert b.prep[1] == "then_this.py"
     assert isinstance(b.do.load, LoadBlock)
