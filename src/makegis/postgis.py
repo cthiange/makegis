@@ -318,8 +318,7 @@ def load_wfs(
     """
     Uses local ogr2ogr executable.
     """
-    ogr2ogr = r"ogr2ogr.exe"
-    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
     cmd += f' WFS:"{src.url}"'
     options = ""
     options += f' -nln "{dst.schema}.{dst.table}"'
@@ -353,8 +352,7 @@ def load_gdb(
     """
     Uses local ogr2ogr executable.
     """
-    ogr2ogr = r"ogr2ogr.exe"
-    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
     assert src.layer is not None
     cmd += f' "{src.path}" "{src.layer}"'
     options = ""
@@ -390,8 +388,7 @@ def load_shp(
     """
     Uses local ogr2ogr executable.
     """
-    ogr2ogr = r"ogr2ogr.exe"
-    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
     cmd += f' "{src.path}" '
     options = ""
     options += f' -nln "{dst.schema}.{dst.table}"'
@@ -427,8 +424,7 @@ def load_esri(
     """
     Uses local ogr2ogr executable.
     """
-    ogr2ogr = r"ogr2ogr.exe"
-    cmd = f'{ogr2ogr} -f "PostgreSQL" PG:"{conn_str}"'
+    cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
     # This will do for now but might want to expose more query parameters
     cmd += f' "{src.url}/query?where=1=1&outFields=*&f={src.f}"'
     options = ""
@@ -464,9 +460,6 @@ def run_ogr_cmd(cmd: str, label: str) -> int:
     o4w_env = os.environ.get("MKGS_O4W_ENV", None)
     if o4w_env is not None:
         cmd = f"@echo off && {o4w_env} && " + cmd
-        shell = True
-    else:
-        shell = False
 
     process = subprocess.Popen(
         cmd,
@@ -474,7 +467,7 @@ def run_ogr_cmd(cmd: str, label: str) -> int:
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-        shell=shell,
+        shell=True,
     )
 
     if process.stdout is not None:
