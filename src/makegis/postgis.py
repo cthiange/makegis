@@ -1,5 +1,6 @@
 import subprocess
 import os
+import re
 
 import duckdb
 import psycopg
@@ -23,7 +24,7 @@ def load_table(target: TargetConfig, job: LoadJob):
         case EsriSource():
             load_esri(target.conn_uri(), job.src, job.dst)
         case DuckDBSource():
-            ddb2pg(target.conn_str(), job.src, job.dst)
+            ddb2pg(target.conn_str(), job.src, job.dst, launder=True)
         case WFSSource():
             load_wfs(target.conn_uri(), job.src, job.dst)
         case FileSource():
@@ -67,18 +68,26 @@ class Column:
     def __str__(self):
         return self._name
 
-
 # Helper function to load a single table from DuckDB to Postgres
 def ddb2pg(
     conn_str: str,
     src: DuckDBSource,
     dst: Destination,
+    launder= True
 ):
     print(
         f"postgis - loading duckdb table from {src.path}:{src.table} to {dst.schema}.{dst.table}"
     )
     if src.pk is not None:
         raise NotImplementedError("Explicit PK not implemented for DuckDB sources")
+
+    if launder:
+        # Replace non alpha-numeric characters and convert to lowercase
+        format_column = lambda col: re.sub(r'[^a-zA-Z0-9]', '_', col).lower()
+    else:
+        # Do nothing
+        format_column = lambda col: col
+
     db = duckdb.connect()
     db.sql("install spatial;")
     db.sql("load spatial;")
@@ -92,10 +101,10 @@ def ddb2pg(
     for i, col, dtype, not_null, default, pk in columns:
         if dtype == "GEOMETRY":
             # Convert geometry to hexwkb for PostGIS
-            statement += f"\n    st_ashexwkb({col}) as {col},"
+            statement += f"\n    st_ashexwkb({col}) as {format_column(col)},"
         else:
-            # Strings need to be quoted
-            statement += f'\n    "{col}",'
+            # Strings need to be quoted in case they're not laundered
+            statement += f'\n    "{col}" as "{format_column(col)}",'
 
     # Remove last trailing comma
     statement = statement[:-1]
@@ -111,7 +120,7 @@ def ddb2pg(
         table = Table(dst)
 
         for i, col_str, dtype, not_null, default, pk in columns:
-            col = Column(col_str)
+            col = Column(format_column(col_str))
             if not_null:
                 conn.execute(
                     sql.SQL(
@@ -138,7 +147,7 @@ def ddb2pg(
                 )
 
         # Add primary key if any
-        pks = [col_str for i, col_str, dtype, not_null, default, pk in columns if pk]
+        pks = [format_column(col_str) for i, col_str, dtype, not_null, default, pk in columns if pk]
         pks = [sql.Identifier(k) for k in pks]
         if pks:
             print("debug - adding primary key")
