@@ -68,7 +68,7 @@ class Destination:
     # Wether to set the standard set of raster constraints
     raster_constraints: bool
     # Raster tile size
-    tile_size: int | None
+    tile_size: int | None 
 
 
 @dataclass(frozen=True)
