@@ -126,6 +126,12 @@ def test_alter_existing_table_raises_error():
         r = analyze_sql_content(sql)
 
 
+def test_analyze_table():
+    sql = "analyze some.table;"
+    r = analyze_sql_content(sql)
+    assert r.dependencies == {DBO("some", "table", "relation")}
+
+
 def test_update_owned_table():
     sql = """
     create table foo as
@@ -137,7 +143,10 @@ def test_update_owned_table():
     """
     r = analyze_sql_content(sql)
     assert r.created == {DBO("", "foo", "relation")}
-    assert r.dependencies == {DBO("", "dep", "relation"), DBO("", "other_dep", "relation")}
+    assert r.dependencies == {
+        DBO("", "dep", "relation"),
+        DBO("", "other_dep", "relation"),
+    }
 
 
 def test_update_existing_table_raises_error():

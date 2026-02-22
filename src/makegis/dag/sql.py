@@ -92,6 +92,9 @@ class State:
             if dbo in self.news:
                 self.dels.add(dbo)
 
+    def analyze(self, dbo: DBO):
+        self.deps.add(dbo)
+
     def summary(self) -> SQLReport:
         assert self.tx is False
         dependencies = (self.deps - self.tmps) - self.news
@@ -219,6 +222,14 @@ def analyze_sql_content(sql: str) -> SQLReport:
                     "relation",
                 )
                 state.alter(target)
+
+            case exp.Analyze(this=exp.Table()):
+                target = DBO(
+                    node.this.db,
+                    node.this.name,
+                    "relation",
+                )
+                state.analyze(target)
 
             case exp.Update(this=exp.Table()):
                 target = DBO(
