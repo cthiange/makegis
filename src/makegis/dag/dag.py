@@ -17,7 +17,7 @@ from ..core.transforms import Transform
 from ..core.commands import Command
 from ..config import TargetConfig
 from .. import postgis
-from .. import log
+from .. import journal
 
 
 class DatabaseObject(NamedTuple):
@@ -140,7 +140,7 @@ class DAG:
 
     def run_node(self, node_id: str, target: TargetConfig):
         node = self._nodes[node_id]
-        event = log.RunEvent(node_id).start()
+        event = journal.RunEvent(node_id).start()
         match node:
             case SourceNode():
                 postgis.load_table(target, node.job)
@@ -172,7 +172,7 @@ class DAG:
 
     def get_outdated(self, target: TargetConfig) -> List[str]:
         """Get ids of outdated nodes"""
-        manifest = log.fetch_manifest(target)
+        manifest = journal.fetch_manifest(target)
 
         # Collects ids of missing or outdated nodes
         outdated = set()

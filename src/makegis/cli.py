@@ -7,7 +7,8 @@ import dotenv
 from . import __version__
 from .dag.builder import Builder
 from .config import RootConfig
-from . import log
+from . import journal
+
 
 def cli():
     print(f"makegis {__version__}")
@@ -31,7 +32,6 @@ def cli():
         help="db instance to target",
     )
     init_parser.set_defaults(func=init)
-
 
     outdated_parser = subparsers.add_parser("outdated", help="list outdated nodes")
     outdated_parser.add_argument(
@@ -69,7 +69,6 @@ def cli():
     show_parser.add_argument("pattern", type=str, help="DAG selection pattern")
     show_parser.set_defaults(func=show)
 
-
     # Load .env
     dotenv.load_dotenv(".env")
 
@@ -81,12 +80,12 @@ def cli():
         parser.print_help()
 
 
-
 def check(args):
     print("check...")
     cfg = load_root_config()
     dag = Builder(cfg).build()
     dag.print()
+
 
 def init(args):
     print("init...")
@@ -96,7 +95,8 @@ def init(args):
     print(f"debug - using target {target_id}")
     target = cfg.targets[target_id]
 
-    log.init_tables(target)
+    journal.init_tables(target)
+
 
 def outdated(args):
     print("outdated...")
@@ -108,6 +108,7 @@ def outdated(args):
 
     dag = Builder(cfg).build()
     dag.show_outdated(target)
+
 
 def run(args):
     print("run...")
