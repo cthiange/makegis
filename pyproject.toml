@@ -7,9 +7,9 @@ name = "makegis"
 version = "0.1.0"
 description = "Build spatial databases"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 license = {text = "MIT"}
-authors = [{name = "Chris Thiange"}]
+authors = [{name = "Christophe Thiange"}]
 
 dependencies = ["duckdb", "psycopg[binary]", "pydantic", "python-dotenv", "pyyaml", "sqlglot"]
 
