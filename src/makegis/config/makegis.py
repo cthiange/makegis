@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Dict
 from typing import List
@@ -15,6 +16,8 @@ except ImportError:
     from yaml import Loader
 
 from .utils import expand_dict_strings
+
+log = logging.getLogger("makegis")
 
 
 class LoadDefaults(BaseModel):
@@ -64,6 +67,7 @@ class FileSourceBlock(BaseSourceBlock, VectorSourceBlock):
     path: Path
     layer: str | None = None
 
+
 class RasterSourceBlock(BaseSourceBlock):
     type: Literal["raster"] = "raster"
     path: Path
@@ -71,6 +75,7 @@ class RasterSourceBlock(BaseSourceBlock):
     raster_column: str | None = None
     raster_constraints: bool | None = None
     tile_size: int | None = None
+
 
 class WFSSourceBlock(BaseSourceBlock, VectorSourceBlock):
     type: Literal["wfs"] = "wfs"
@@ -217,7 +222,7 @@ class MakeGISConfig(BaseModel):
 
     @classmethod
     def from_file(cls, path: Path):
-        print(f"debug - reading {path}")
+        log.debug(f"reading {path}")
         with open(path) as f:
             d = yaml.load(f, Loader)
         return cls.from_dict(d)

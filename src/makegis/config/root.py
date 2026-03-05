@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Dict
 
@@ -11,6 +12,8 @@ except ImportError:
 
 from .makegis import LoadDefaults
 from .utils import expand_dict_strings
+
+log = logging.getLogger("makegis")
 
 
 class RootDefaults(BaseModel):
@@ -45,7 +48,7 @@ class RootConfig(BaseModel):
 
     @classmethod
     def from_file(cls, path: Path):
-        print(f"debug - reading {path}")
+        log.debug(f"reading {path}")
         with open(path) as f:
             d = yaml.load(f, Loader)
         rc = cls.from_dict(d)

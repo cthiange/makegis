@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
+import logging
 import platform
 import subprocess
 from typing import Dict
@@ -10,6 +11,8 @@ import psycopg
 
 from .config import TargetConfig
 from . import __version__
+
+log = logging.getLogger("makegis")
 
 
 @dataclass(frozen=True)
@@ -43,26 +46,29 @@ class RunEvent:
             db_user=target.user,
             hostname=platform.node(),
             mkgs_version=__version__,
-            repo_hash=get_repo_hash()
+            repo_hash=get_repo_hash(),
         )
         log_run(target, record)
 
+
 def get_repo_hash():
     try:
-        desc = subprocess.check_output(
-            ["git", "describe", "--always", "--dirty"],
-            stderr=subprocess.DEVNULL
-        ).decode().strip()
+        desc = (
+            subprocess.check_output(
+                ["git", "describe", "--always", "--dirty"], stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
         return desc
     except subprocess.CalledProcessError:
         return None
 
 
 def init_tables(target: TargetConfig):
-    print("initializing event table")
+    log.info("initializing event table")
     with psycopg.connect(target.conn_str()) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             create table _makegis_runs (
                 node_id text not null,
                 started timestamp not null,
@@ -72,12 +78,12 @@ def init_tables(target: TargetConfig):
                 mkgs_version text not null,
                 repo_revision text
             );
-            """
-        )
+            """)
         conn.commit()
 
 
 def log_run(target: TargetConfig, record: RunRecord):
+    log.debug("logging run to journal")
     with psycopg.connect(target.conn_str()) as conn:
         conn.execute(
             """
@@ -90,28 +96,29 @@ def log_run(target: TargetConfig, record: RunRecord):
                 mkgs_version,
                 repo_revision
             ) values (%s, %s, %s, %s, %s, %s, %s);
-            """, (
+            """,
+            (
                 record.node_id,
                 record.started,
                 record.completed,
                 record.db_user,
                 record.hostname,
                 record.mkgs_version,
-                record.repo_hash
-            )
+                record.repo_hash,
+            ),
         )
 
 
-def fetch_manifest(target: TargetConfig) -> Dict[str,datetime]:
+def fetch_manifest(target: TargetConfig) -> Dict[str, datetime]:
+    log.debug(f"fetching manifest from target")
     with psycopg.connect(target.conn_str()) as conn:
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             select node_id
                 , max(completed) as last_run_utc
             from _makegis_runs
             group by 1;
-            """
-        ).fetchall()
+            """).fetchall()
         # Map node ids to timestamp coverted from utc to local.
-        return {row[0]: row[1].replace(tzinfo=timezone.utc).astimezone() for row in rows}
-
+        return {
+            row[0]: row[1].replace(tzinfo=timezone.utc).astimezone() for row in rows
+        }

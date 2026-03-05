@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import sys
@@ -18,6 +19,10 @@ from ..core.commands import Command
 from ..config import TargetConfig
 from .. import postgis
 from .. import journal
+from .. import errors
+from ..utils import capture_logs
+
+log = logging.getLogger("makegis")
 
 
 class DatabaseObject(NamedTuple):
@@ -109,35 +114,6 @@ class DAG:
             for dbo in node.owns:
                 print(f"\t{dbo.full_name}")
 
-    def run(self, pattern: str, target: TargetConfig, force=False):
-        """
-        Run nodes selected by pattern.
-
-        By default, will only run nodes that are outdated.
-        Use `force=True` to override.
-
-        force: run nodes even when not outdated
-        """
-        node_ids = self.select_nodes(pattern)
-
-        if not node_ids:
-            print(f"no nodes matching pattern '{pattern}'")
-            return
-
-        if force:
-            outdated = set(node_ids)
-        else:
-            outdated = set(self.get_outdated(target))
-
-        nb_nodes = len(node_ids)
-        for i, nid in enumerate(node_ids):
-            if nid in outdated:
-                print(f"{i+1}/{nb_nodes} running node {nid}")
-                self.run_node(nid, target)
-            else:
-                print(f"{i+1}/{nb_nodes} skipping node {nid} (not stale)")
-
-
     def run_node(self, node_id: str, target: TargetConfig):
         node = self._nodes[node_id]
         event = journal.RunEvent(node_id).start()
@@ -149,28 +125,32 @@ class DAG:
             case CustomNode():
                 n = len(node.prep)
                 for i, action in enumerate(node.prep, start=1):
-                    ret = run_action(action.path, i, n)
+                    ret = run_action(action.path, f"prep {i}/{n}")
                     if ret == 0:
                         continue
-                    print(f"error - prep {i}/{n} {action} failed")
+                    log.error(f"prep {i}/{n} {action} failed")
                     raise RuntimeError("prep step failed")
                 for job in node.load:
                     postgis.load_table(target, job)
                 for i, action in enumerate(node.run):
-                    ret = run_action(action.path, i, n)
+                    ret = run_action(action.path, f"run {i}/{n}")
                     if ret == 0:
                         continue
-                    print(f"error - task {i}/{n} {action} failed")
+                    log.error(f"task {i}/{n} {action} failed")
                     raise RuntimeError("run step failed")
                 for i, action in enumerate(node.cleanup):
-                    ret = run_action(action.path, i, n)
+                    ret = run_action(action.path, f"cleanup {i}/{n}")
                     if ret == 0:
                         continue
-                    print(f"error - cleanup {i}/{n} {action} failed")
+                    log.error(f"cleanup {i}/{n} {action} failed")
                     raise RuntimeError("cleanup step failed")
         event.log(target)
 
-    def get_outdated(self, target: TargetConfig) -> List[str]:
+    def get_outdated(
+        self,
+        target: TargetConfig,
+        limit_to: List[str] | None = None,
+    ) -> Set[str]:
         """Get ids of outdated nodes"""
         manifest = journal.fetch_manifest(target)
 
@@ -198,11 +178,17 @@ class DAG:
                 if pid not in manifest or node_ts < manifest[pid]:
                     outdated.add(node_id)
 
-        return list(outdated)
+        if limit_to is not None:
+            log.debug("limiting outdated nodes to {limit_to}")
+            outdated = outdated = set(limit_to)
+
+        log.info(f"found {len(outdated)} outdated node(s)")
+
+        return outdated
 
     def show_outdated(self, target: TargetConfig):
         """Print ids of outdated nodes"""
-        outdated = self.get_outdated(target)
+        outdated = list(self.get_outdated(target))
         # Print outdated node ids sorted alphabetically
         outdated.sort()
         print("Outdated nodes:")
@@ -210,26 +196,34 @@ class DAG:
             print(f"  {node_id}")
         print(f"Number of outdated nodes: {len(outdated)}")
 
-        
-
-    def show(self, pattern: str):
+    def render_node(self, node_id: str) -> str:
         """
-        Print a DAG node or subset.
-
-        Usefull to test out selection patterns.
+        Render a DAG node to string.
         """
-        node_ids = self.select_nodes(pattern)
+        node = self._nodes[node_id]
+        match node:
+            case SourceNode():
+                node_type = "S"
+            case TransformNode():
+                node_type = "T"
+            case CustomNode():
+                node_type = "C"
+            case _:
+                node_type = "?"
+        s = f"[{node_type}] {node.id}\n"
+        for dbo in node.deps:
+            s += f"\t{dbo.full_name} -->\n"
+        for dbo in node.owns:
+            s += f"\t--> {dbo.full_name}"
+        return s
 
-        if not node_ids:
-            print(f"no nodes matching pattern '{pattern}'")
-            return
-
-        for nid in node_ids:
-            print_node(self._nodes[nid])
-
-    def select_nodes(self, pattern) -> List[str]:
+    def select_nodes(self, pattern: str) -> List[str]:
         """
         Get list of topologically sorted node ids matching given selection pattern.
+
+        Args:
+            pattern: DAG selection pattern. See below.
+            outdated: Include outdated nodes only. Defaults to False.
 
         Pattern syntax:
 
@@ -241,7 +235,7 @@ class DAG:
             - `node+1`  select node and its 1st degree descendants
             - `2+node`  select node and its 1st and 2nd degree ancestors
         """
-        # Default graph propagation flags  
+        # Default graph propagation flags
         upstream = False
         downstream = False
 
@@ -253,7 +247,9 @@ class DAG:
             downstream = True
             search = search[:-1]
         if "+" in search:
-            raise ValueError("The '+' graph operator can only be used at the start and end of a selectio pattern")
+            raise ValueError(
+                "The '+' graph operator can only be used at the start and end of a selectio pattern"
+            )
 
         # Convert search term to equivalent regex
         search = re.escape(search).replace("\\*", ".*")
@@ -268,33 +264,22 @@ class DAG:
 
         # Collect upstream and downstream nodes if needed
         if upstream or downstream:
-            raise NotImplementedError("The `+` graph selection operator is not supported yet")
+            raise NotImplementedError(
+                "The `+` graph selection operator is not supported yet"
+            )
 
         # Sort nodes topologically
         ts = graphlib.TopologicalSorter(self._graph)
-        selection = [nid for nid  in ts.static_order() if nid in selection]
+        selection = [nid for nid in ts.static_order() if nid in selection]
+
+        log.info(
+            f"found {len(selection)} node(s) matching selection pattern '{pattern}'"
+        )
 
         return selection
 
 
-def print_node(node: Node):
-    match node:
-        case SourceNode():
-            node_type = "S"
-        case TransformNode():
-            node_type = "T"
-        case CustomNode():
-            node_type = "C"
-        case _:
-            node_type = "?"
-    print(f"[{node_type}] {node.id}")
-    for dbo in node.deps:
-        print(f"\t{dbo.full_name} -->")
-    for dbo in node.owns:
-        print(f"\t--> {dbo.full_name}")
-
-
-def run_action(action: Path, i: int, n: int):
+def run_action(action: Path, log_prefix: str):
     cmd = []
     if action.suffix == ".py":
         python_exe = sys.executable
@@ -312,9 +297,7 @@ def run_action(action: Path, i: int, n: int):
         bufsize=1,
     )
 
-    if process.stdout is not None:
-        for line in process.stdout:
-            print(f"prep ({i}/{n}) | {line}", end="")
+    capture_logs(process.stdout, log_prefix)
 
     return process.wait()
 
@@ -346,9 +329,7 @@ def run_sql(target: TargetConfig, path: Path):
         bufsize=1,
     )
 
-    if process.stdout is not None:
-        for line in process.stdout:
-            print(f"transform ({path.name}) | {line}", end="")
+    capture_logs(process.stdout, f"transform ({path.name})")
 
     ret = process.wait()
 

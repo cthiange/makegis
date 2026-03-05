@@ -1,6 +1,7 @@
-import subprocess
+import logging
 import os
 import re
+import subprocess
 
 import duckdb
 import psycopg
@@ -15,6 +16,10 @@ from .core.load import WFSSource
 from .core.load import FileSource
 from .core.load import RasterSource
 from .core.load import Destination
+from .errors import FailedNodeRun
+from .utils import capture_logs
+
+log = logging.getLogger("makegis")
 
 
 def load_table(target: TargetConfig, job: LoadJob):
@@ -68,14 +73,10 @@ class Column:
     def __str__(self):
         return self._name
 
+
 # Helper function to load a single table from DuckDB to Postgres
-def ddb2pg(
-    conn_str: str,
-    src: DuckDBSource,
-    dst: Destination,
-    launder= True
-):
-    print(
+def ddb2pg(conn_str: str, src: DuckDBSource, dst: Destination, launder=True):
+    log.info(
         f"postgis - loading duckdb table from {src.path}:{src.table} to {dst.schema}.{dst.table}"
     )
     if src.pk is not None:
@@ -83,7 +84,7 @@ def ddb2pg(
 
     if launder:
         # Replace non alpha-numeric characters and convert to lowercase
-        format_column = lambda col: re.sub(r'[^a-zA-Z0-9]', '_', col).lower()
+        format_column = lambda col: re.sub(r"[^a-zA-Z0-9]", "_", col).lower()
     else:
         # Do nothing
         format_column = lambda col: col
@@ -147,15 +148,19 @@ def ddb2pg(
                 )
 
         # Add primary key if any
-        pks = [format_column(col_str) for i, col_str, dtype, not_null, default, pk in columns if pk]
+        pks = [
+            format_column(col_str)
+            for i, col_str, dtype, not_null, default, pk in columns
+            if pk
+        ]
         pks = [sql.Identifier(k) for k in pks]
         if pks:
-            print("debug - adding primary key")
+            log.info("adding primary key")
             stmt = sql.SQL("alter table {table} add primary key ({key})").format(
                 table=table.ident,
                 key=sql.SQL(",").join(pks),
             )
-            print(f"trace - {stmt.as_string()}")
+            log.debug(f"{stmt.as_string()}")
             conn.execute(stmt)
 
         conn.commit()
@@ -169,10 +174,8 @@ def _process_duckdb_geo_column(
     dst_epsg: int | None,
     geom_index: bool = False,
 ):
-    print(f"processing geometry column '{col}' for table '{table}'")
-    print(
-        f"trace - src_epsg: {src_epsg}, dst_epsg: {dst_epsg}, geom_index: {geom_index}"
-    )
+    log.info(f"processing geometry column '{col}' for table '{table}'")
+    log.debug(f"src_epsg: {src_epsg}, dst_epsg: {dst_epsg}, geom_index: {geom_index}")
     if dst_epsg is None:
         # Because epsg setting is either dst or src:dst, src cannot be set without dst
         assert src_epsg is None, "src_epsg cannot be set without a dst_epsg"
@@ -196,7 +199,7 @@ def _duckdb_cast_geom_without_srid(
     col: Column,
 ):
     """Casts the geo column to a generic geometry type"""
-    print("trace - _duckdb_cast_geom_without_srid")
+    log.debug("_duckdb_cast_geom_without_srid")
     conn.execute(
         sql.SQL(
             "alter table {table} alter column {col} type geometry using {col}::geometry"
@@ -211,16 +214,12 @@ def _duckdb_cast_geom_with_srid(
     epsg: int,
 ):
     """Casts the geo column to a geometry type with srid"""
-    print("trace - _duckdb_cast_geom_with_srid")
-    conn.execute(
-        sql.SQL(
-            """
+    log.debug("_duckdb_cast_geom_with_srid")
+    conn.execute(sql.SQL("""
             alter table {table}
                 alter column {col} type geometry(GEOMETRY, {epsg})
                 using {col}::geometry(GEOMETRY, {epsg})
-            """
-        ).format(table=table.ident, col=col.ident, epsg=sql.Literal(epsg))
-    )
+            """).format(table=table.ident, col=col.ident, epsg=sql.Literal(epsg)))
 
 
 def _duckdb_cast_geom_with_transform(
@@ -231,15 +230,13 @@ def _duckdb_cast_geom_with_transform(
     dst_epsg: int,
 ):
     """Casts the geo column to a geometry type while transforming between srids"""
-    print("trace - _duckdb_cast_geom_with_transform")
+    log.debug("_duckdb_cast_geom_with_transform")
     conn.execute(
-        sql.SQL(
-            """
+        sql.SQL("""
             alter table {table}
                 alter column {col} type geometry(GEOMETRY, {dst_epsg})
                 using st_transform({col}::geometry(GEOMETRY, {src_epsg}), {dst_epsg})
-            """
-        ).format(
+            """).format(
             table=table.ident,
             col=col.ident,
             src_epsg=sql.Literal(src_epsg),
@@ -252,14 +249,10 @@ def _ensure_gist_index(conn: psycopg.Connection, table: Table, col: Column):
     if _column_has_index(conn, table, col, "gist"):
         return
 
-    print(f"debug - creating index on {col} in {table}")
-    conn.execute(
-        sql.SQL(
-            """
+    log.debug(f"creating index on {col} in {table}")
+    conn.execute(sql.SQL("""
             create index on {table} using GIST({col});
-            """
-        ).format(table=table.ident, col=col.ident)
-    )
+            """).format(table=table.ident, col=col.ident))
 
 
 def _column_has_index(
@@ -268,8 +261,7 @@ def _column_has_index(
     col: Column,
     index_type: str,
 ) -> bool:
-    qry = sql.SQL(
-        """
+    qry = sql.SQL("""
         select
             c.relname as index_name,
             x.indisunique as is_unique,
@@ -288,8 +280,7 @@ def _column_has_index(
             and t.relname = {table}
             and a.attname = {column}
             and am.amname ilike {index_type};
-    """
-    ).format(
+    """).format(
         schema=table.literal_schema,
         table=table.literal_table,
         column=col.literal,
@@ -306,17 +297,17 @@ def load_csv(
 ):
     db = duckdb.connect()
     db.sql(f"attach '{conn_str}' as pg (TYPE postgres);")
-    db.sql(
-        f"""
+    db.sql(f"""
         create or replace table pg.{dst.schema}.{dst.table} as
             select * from '{src.path}';
-        """
-    )
+        """)
     db.close()
 
     with psycopg.connect(conn_str) as conn:
         if src.pk is not None:
-            conn.execute(f"alter table {dst.schema}.{dst.table} add primary key ({src.pk})")
+            conn.execute(
+                f"alter table {dst.schema}.{dst.table} add primary key ({src.pk})"
+            )
 
 
 def load_wfs(
@@ -347,10 +338,9 @@ def load_wfs(
     cmd += options
 
     ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
-    print(f"debug - return code: {ret}")
+    log.debug(f"return code: {ret}")
     if ret != 0:
-        print(f"error - loading wfs failed with code ({ret})")
-        raise RuntimeError("loading wfs failed")
+        raise FailedNodeRun("loading wfs source failed with code {ret}")
 
 
 def load_gdb(
@@ -383,10 +373,9 @@ def load_gdb(
     cmd += options
 
     ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
-    print(f"debug - return code: {ret}")
+    log.debug(f"return code: {ret}")
     if ret != 0:
-        print(f"error - loading gdb failed with code ({ret})")
-        raise RuntimeError("loading gdb layer failed")
+        raise FailedNodeRun("loading gdb source failed with code {ret}")
 
 
 def load_shp(
@@ -419,10 +408,9 @@ def load_shp(
     cmd += options
 
     ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
-    print(f"debug - return code: {ret}")
+    log.debug(f"return code: {ret}")
     if ret != 0:
-        print(f"error - loading shp failed with code ({ret})")
-        raise RuntimeError("loading shp layer failed")
+        raise FailedNodeRun("loading shapefile source failed with code {ret}")
 
 
 def load_esri(
@@ -457,10 +445,9 @@ def load_esri(
     cmd += options
 
     ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
-    print(f"debug - return code: {ret}")
+    log.debug(f"return code: {ret}")
     if ret != 0:
-        print(f"error - loading esri failed with code ({ret})")
-        raise RuntimeError("loading esri failed")
+        raise FailedNodeRun(f"loading esri source failed with code ({ret})")
 
 
 def run_ogr_cmd(cmd: str, label: str) -> int:
@@ -479,9 +466,7 @@ def run_ogr_cmd(cmd: str, label: str) -> int:
         shell=True,
     )
 
-    if process.stdout is not None:
-        for line in process.stdout:
-            print(f"load ({label}) | {line}", end="")
+    capture_logs(process.stdout, f"load ({label})")
 
     return process.wait()
 
@@ -517,11 +502,19 @@ def raster2pgsql(
     if dst.raster_constraints:
         options += ["-C"]
 
-
     r2p_cmd = [r2p] + options + [src.path, f"{dst.schema}.{dst.table}"]
 
-    psql_cmd = [psql, "-h", target.host, "-p", str(target.port), "-d", target.db, "-U", target.user]
-
+    psql_cmd = [
+        psql,
+        "-h",
+        target.host,
+        "-p",
+        str(target.port),
+        "-d",
+        target.db,
+        "-U",
+        target.user,
+    ]
 
     r2p_process = subprocess.Popen(r2p_cmd)
 
@@ -536,19 +529,16 @@ def raster2pgsql(
     )
 
     label = f"{dst.schema}.{dst.table}"
-    if psql_process.stdout is not None:
-        for line in psql_process.stdout:
-            print(f"load ({label}) | {line}", end="")
+    capture_logs(psql_process.stdout, f"load {label}")
 
     ret = r2p_process.wait()
-    print(f"debug - raster2pgsql return code: {ret}")
-    if ret != 0: 
-        print(f"error - loading raster (raster2pgsql) failed with code ({ret})")
-        raise RuntimeError("loading raster failed")
+    log.debug(f"raster2pgsql return code: {ret}")
+    if ret != 0:
+        raise FailedNodeRun(
+            "loading raster source (raster2pgsql) failed with code {ret}"
+        )
 
     ret = psql_process.wait()
-    print(f"debug - psql return code: {ret}")
-    if ret != 0: 
-        print(f"error - loading raster (psql) failed with code ({ret})")
-        raise RuntimeError("loading raster failed")
-
+    log.debug(f"psql return code: {ret}")
+    if ret != 0:
+        raise RuntimeError(f"loading raster source (psql) failed with code ({ret})")

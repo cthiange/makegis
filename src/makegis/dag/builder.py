@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import List
 from typing import Tuple
@@ -30,6 +31,8 @@ from .dag import SourceNode
 from .dag import TransformNode
 from .dag import CustomNode
 from .sql import analyze_sql_file
+
+log = logging.getLogger("makegis")
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,7 @@ class Builder:
 
     def build(self) -> DAG:
         """Build DAG from makegis.yml files found in dir tree"""
+        log.info("building DAG")
         # Init a list to collect DAG nodes in
         nodes = []
         # Iterate over all makegis.yml files under the project's root dir
@@ -291,10 +295,10 @@ class LoadDefaultHandler:
 
     def raster_constraints(self, src: SourceBlock) -> str | None:
         return self._fallback(src, "raster_constraints")
-    
+
     def tile_size(self, src: SourceBlock) -> str | None:
         return self._fallback(src, "tile_size")
-    
+
     def _fallback(self, src: SourceBlock, key: str):
         if key in src.model_fields_set:
             return getattr(src, key)
