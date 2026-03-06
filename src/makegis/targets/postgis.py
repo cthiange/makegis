@@ -1,3 +1,4 @@
+from datetime import timezone
 import logging
 import os
 import re
@@ -7,45 +8,147 @@ import duckdb
 import psycopg
 from psycopg import sql
 
-from .config import TargetConfig
-from .core.load import LoadJob
-from .core.load import CSVSource
-from .core.load import EsriSource
-from .core.load import DuckDBSource
-from .core.load import WFSSource
-from .core.load import FileSource
-from .core.load import RasterSource
-from .core.load import Destination
-from .errors import FailedNodeRun
-from .utils import capture_logs
+from ..config.root import TargetConfig
+from ..core.load import CSVSource
+from ..core.load import Destination
+from ..core.load import DuckDBSource
+from ..core.load import EsriSource
+from ..core.load import FileSource
+from ..core.load import LoadJob
+from ..core.load import RasterSource
+from ..core.load import WFSSource
+from ..core.transforms import Transform
+from ..errors import FailedNodeRun
+from ..utils import capture_logs
+from ..journal import RunRecord
+from ..journal import Manifest
 
 log = logging.getLogger("makegis")
 
 
-def load_table(target: TargetConfig, job: LoadJob):
-    match job.src:
-        case CSVSource():
-            load_csv(target.conn_str(), job.src, job.dst)
-        case EsriSource():
-            load_esri(target.conn_uri(), job.src, job.dst)
-        case DuckDBSource():
-            ddb2pg(target.conn_str(), job.src, job.dst, launder=True)
-        case WFSSource():
-            load_wfs(target.conn_uri(), job.src, job.dst)
-        case FileSource():
-            match job.src.path.suffix:
-                case ".gdb":
-                    load_gdb(target.conn_uri(), job.src, job.dst)
-                case ".shp":
-                    load_shp(target.conn_uri(), job.src, job.dst)
-                case _:
-                    raise NotImplementedError(
-                        f"Loading {job.src.path.suffix} files is not supported yet"
-                    )
-        case RasterSource():
-            raster2pgsql(target, job.src, job.dst)
-        case _:
-            raise NotImplementedError
+class PostgisTarget:
+
+    def __init__(self, config: TargetConfig):
+        self.host = config.host
+        self.user = config.user
+        self.port = config.port
+        self.user = config.user
+        self.db = config.db
+        self.conn_str = config.conn_str()
+        self.conn_uri = config.conn_uri()
+
+    def load_table(self, job: LoadJob):
+        match job.src:
+            case CSVSource():
+                load_csv(self.conn_str, job.src, job.dst)
+            case EsriSource():
+                load_esri(self.conn_uri, job.src, job.dst)
+            case DuckDBSource():
+                ddb2pg(self.conn_str, job.src, job.dst, launder=True)
+            case WFSSource():
+                load_wfs(self.conn_uri, job.src, job.dst)
+            case FileSource():
+                match job.src.path.suffix:
+                    case ".gdb":
+                        load_gdb(self.conn_uri, job.src, job.dst)
+                    case ".shp":
+                        load_shp(self.conn_uri, job.src, job.dst)
+                    case _:
+                        raise NotImplementedError(
+                            f"Loading {job.src.path.suffix} files is not supported yet"
+                        )
+            case RasterSource():
+                raster2pgsql(target, job.src, job.dst)
+            case _:
+                raise NotImplementedError
+
+    def run_transform(self, transform: Transform):
+        path = transform.sql
+        assert path.suffix == ".sql"
+        psql = os.environ.get("MKGS_PSQL", "psql")
+        cmd = [
+            psql,
+            "-h",
+            self.host,
+            "-U",
+            self.user,
+            "-p",
+            str(self.port),
+            "-d",
+            self.db,
+            "-v",
+            "ON_ERROR_STOP=ON",
+            "-f",
+            path,
+        ]
+
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        capture_logs(process.stdout, f"transform ({path.name})")
+
+        ret = process.wait()
+
+        if ret != 0:
+            raise RuntimeError(f"error while running sql transform {path}")
+
+    def init_journal(self):
+        with psycopg.connect(self.conn_str) as conn:
+            conn.execute("""
+                create table if not exists _makegis_runs (
+                    node_id text not null,
+                    started timestamp not null,
+                    completed timestamp not null,
+                    db_user text not null,
+                    hostname text not null,
+                    mkgs_version text not null,
+                    repo_revision text
+                );
+                """)
+            conn.commit()
+
+    def log_event(self, record: RunRecord):
+        with psycopg.connect(self.conn_str) as conn:
+            conn.execute(
+                """
+                insert into _makegis_runs(
+                    node_id,
+                    started,
+                    completed,
+                    db_user,
+                    hostname,
+                    mkgs_version,
+                    repo_revision
+                ) values (%s, %s, %s, %s, %s, %s, %s);
+                """,
+                (
+                    record.node_id,
+                    record.started,
+                    record.completed,
+                    record.db_user,
+                    record.hostname,
+                    record.mkgs_version,
+                    record.repo_hash,
+                ),
+            )
+
+    def fetch_manifest(self) -> Manifest:
+        with psycopg.connect(self.conn_str) as conn:
+            rows = conn.execute("""
+                select node_id
+                    , max(completed) as last_run_utc
+                from _makegis_runs
+                group by 1;
+                """).fetchall()
+            # Map node ids to timestamp coverted from utc to local.
+            return {
+                row[0]: row[1].replace(tzinfo=timezone.utc).astimezone() for row in rows
+            }
 
 
 class Table:
@@ -472,8 +575,8 @@ def run_ogr_cmd(cmd: str, label: str) -> int:
 
 
 def raster2pgsql(
-    target: TargetConfig,
-    src: EsriSource,
+    target: PostgisTarget,
+    src: RasterSource,
     dst: Destination,
 ):
     psql = os.environ.get("MKGS_PSQL", "psql")

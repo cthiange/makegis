@@ -8,9 +8,9 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from . import __version__
-from .dag.builder import Builder
 from .config import RootConfig
-from . import journal
+from .dag.builder import Builder
+from .targets import Target
 from . import errors
 
 console = Console()
@@ -54,9 +54,7 @@ def cli():
     )
     log.info(f"makegis {__version__}")
 
-    parser = argparse.ArgumentParser(
-        prog="mkgs", description="Spatial database builder"
-    )
+    parser = argparse.ArgumentParser(prog="mkgs")
 
     # The --verbose and --debug options are parsed outside of argparse but we still declare
     # them here so they show up as general options in the generated help.
@@ -115,14 +113,12 @@ def cli():
 
 
 def init(args):
-    log.info("init...")
     cfg = load_root_config()
     target_id = args.target or cfg.defaults.target
     assert target_id is not None
     log.info(f"using target {target_id}")
-    target = cfg.targets[target_id]
-
-    journal.init_tables(target)
+    target = Target(cfg.targets[target_id])
+    target.init_journal()
 
 
 def outdated(args):
@@ -130,10 +126,15 @@ def outdated(args):
     target_id = args.target or cfg.defaults.target
     assert target_id is not None
     log.info(f"using target {target_id}")
-    target = cfg.targets[target_id]
+    target = Target(cfg.targets[target_id])
 
     dag = Builder(cfg).build()
-    dag.show_outdated(target)
+    node_ids = dag.get_outdated(target)
+    if not node_ids:
+        print("All nodes are up to date.")
+
+    for node_id in node_ids:
+        print(dag.render_node(node_id))
 
 
 def run(args):
@@ -142,7 +143,7 @@ def run(args):
     target_id = args.target or cfg.defaults.target
     assert target_id is not None
     log.info(f"using target {target_id}")
-    target = cfg.targets[target_id]
+    target = Target(cfg.targets[target_id])
 
     dag = Builder(cfg).build()
     node_ids = dag.select_nodes(args.pattern)

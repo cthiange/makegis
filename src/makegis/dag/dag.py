@@ -16,11 +16,10 @@ import graphlib
 from ..core.load import LoadJob
 from ..core.transforms import Transform
 from ..core.commands import Command
-from ..config import TargetConfig
-from .. import postgis
 from .. import journal
 from .. import errors
 from ..utils import capture_logs
+from ..targets import Target
 
 log = logging.getLogger("makegis")
 
@@ -114,14 +113,14 @@ class DAG:
             for dbo in node.owns:
                 print(f"\t{dbo.full_name}")
 
-    def run_node(self, node_id: str, target: TargetConfig):
+    def run_node(self, node_id: str, target: Target):
         node = self._nodes[node_id]
         event = journal.RunEvent(node_id).start()
         match node:
             case SourceNode():
-                postgis.load_table(target, node.job)
+                target.load_table(node.job)
             case TransformNode():
-                run_sql(target, node.transform.sql)
+                target.run_transform(node.transform)
             case CustomNode():
                 n = len(node.prep)
                 for i, action in enumerate(node.prep, start=1):
@@ -131,7 +130,7 @@ class DAG:
                     log.error(f"prep {i}/{n} {action} failed")
                     raise RuntimeError("prep step failed")
                 for job in node.load:
-                    postgis.load_table(target, job)
+                    target.load_table(job)
                 for i, action in enumerate(node.run):
                     ret = run_action(action.path, f"run {i}/{n}")
                     if ret == 0:
@@ -144,15 +143,15 @@ class DAG:
                         continue
                     log.error(f"cleanup {i}/{n} {action} failed")
                     raise RuntimeError("cleanup step failed")
-        event.log(target)
+        target.log_event(event)
 
     def get_outdated(
         self,
-        target: TargetConfig,
+        target: Target,
         limit_to: List[str] | None = None,
     ) -> Set[str]:
         """Get ids of outdated nodes"""
-        manifest = journal.fetch_manifest(target)
+        manifest = target.fetch_manifest()
 
         # Collects ids of missing or outdated nodes
         outdated = set()
@@ -185,16 +184,6 @@ class DAG:
         log.info(f"found {len(outdated)} outdated node(s)")
 
         return outdated
-
-    def show_outdated(self, target: TargetConfig):
-        """Print ids of outdated nodes"""
-        outdated = list(self.get_outdated(target))
-        # Print outdated node ids sorted alphabetically
-        outdated.sort()
-        print("Outdated nodes:")
-        for node_id in outdated:
-            print(f"  {node_id}")
-        print(f"Number of outdated nodes: {len(outdated)}")
 
     def render_node(self, node_id: str) -> str:
         """
@@ -300,38 +289,3 @@ def run_action(action: Path, log_prefix: str):
     capture_logs(process.stdout, log_prefix)
 
     return process.wait()
-
-
-def run_sql(target: TargetConfig, path: Path):
-    assert path.suffix == ".sql"
-    psql = os.environ.get("MKGS_PSQL", "psql")
-    cmd = [
-        psql,
-        "-h",
-        target.host,
-        "-U",
-        target.user,
-        "-p",
-        str(target.port),
-        "-d",
-        target.db,
-        "-v",
-        "ON_ERROR_STOP=ON",
-        "-f",
-        path,
-    ]
-
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
-    capture_logs(process.stdout, f"transform ({path.name})")
-
-    ret = process.wait()
-
-    if ret != 0:
-        raise RuntimeError(f"error while running sql transform {path}")
