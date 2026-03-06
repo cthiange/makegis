@@ -22,7 +22,7 @@ class RunRecord:
     db_user: str
     hostname: str
     mkgs_version: str
-    repo_hash: str
+    repo_hash: str | None
 
 
 class RunEvent:
@@ -49,7 +49,7 @@ class RunEvent:
         )
 
 
-def get_repo_hash():
+def get_repo_hash() -> str | None:
     try:
         desc = (
             subprocess.check_output(
