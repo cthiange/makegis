@@ -178,8 +178,8 @@ class DAG:
                     outdated.add(node_id)
 
         if limit_to is not None:
-            log.debug("limiting outdated nodes to {limit_to}")
-            outdated = outdated = set(limit_to)
+            log.debug(f"limiting outdated nodes to {limit_to}")
+            outdated = outdated & set(limit_to)
 
         log.info(f"found {len(outdated)} outdated node(s)")
 

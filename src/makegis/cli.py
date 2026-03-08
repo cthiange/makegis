@@ -153,6 +153,7 @@ def run(args):
 
     if not args.force:
         outdated = dag.get_outdated(target, limit_to=node_ids)
+        node_ids = outdated
 
         if not node_ids:
             print("All selected nodes are up to date. Use --force to run anyways.")
