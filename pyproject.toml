@@ -1,22 +1,34 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "makegis"
-version = "0.1.0"
-description = "Build spatial databases"
+description = "A lightweight orchestrator for spatial databases"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
-authors = [{name = "Christophe Thiange"}]
-
-dependencies = ["duckdb", "psycopg[binary]", "pydantic", "python-dotenv", "pyyaml", "sqlglot"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Christophe Thiange" }]
+dependencies = [
+	"duckdb",
+	"psycopg[binary]",
+	"pydantic",
+	"python-dotenv",
+	"pyyaml",
+	"rich",
+	"sqlglot",
+]
+dynamic = ["version"]
 
 [project.scripts]
 mkgs = "makegis.cli:cli"
 
+[project.urls]
+Repository = "https://github.com/cthiange/makegis"
+
+[tool.hatch.version]
+path = "src/makegis/__init__.py"
+
 [tool.pytest.ini_options]
-addopts = [
-    "--import-mode=importlib",
-]
+addopts = ["--import-mode=importlib"]
