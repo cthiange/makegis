@@ -68,7 +68,7 @@ class Builder:
 
     def build(self) -> DAG:
         """Build DAG from makegis.yml files found in dir tree"""
-        log.info("building DAG")
+        log.debug("building DAG")
         # Init a list to collect DAG nodes in
         nodes = []
         # Iterate over all makegis.yml files under the project's root dir

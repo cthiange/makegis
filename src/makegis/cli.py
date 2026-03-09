@@ -171,7 +171,7 @@ def run(args):
             except Exception:
                 log.exception(f"node '{node_id}' run failed!")
                 return
-        print("Running {n} node(s) finished succesfully.")
+        print(f"Done. Ran {n} node(s).")
 
 
 def show(args):

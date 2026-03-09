@@ -17,7 +17,6 @@ type _Inner = PostgisTarget
 class Target:
 
     def __init__(self, config: TargetConfig):
-        log.info("initializing event table")
         self._cfg = config
         self._inner: _Inner = PostgisTarget(config)
 
@@ -28,6 +27,7 @@ class Target:
         self._inner.run_transform(transform)
 
     def init_journal(self):
+        log.debug("initializing event table")
         self._inner.init_journal()
 
     def fetch_manifest(self) -> Manifest:
