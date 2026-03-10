@@ -112,6 +112,14 @@ class PostgisTarget:
                 """)
             conn.commit()
 
+    def ensure_schema(self, schema: str):
+        statement = sql.SQL("create schema if not exists {schema}").format(
+            schema=sql.Identifier(schema)
+        )
+        with psycopg.connect(self.conn_str) as conn:
+            log.debug(statement)
+            conn.execute(statement)
+
     def log_event(self, record: RunRecord):
         with psycopg.connect(self.conn_str) as conn:
             conn.execute(

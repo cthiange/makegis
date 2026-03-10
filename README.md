@@ -54,7 +54,7 @@ options:
 ### mkgs init
 
 The `init` command prepares a target database to work with MakeGIS. It creates a `_makegis_log` journal table that is used to track which nodes have been run, when and at what version.
-
+It will also create any missing schemas expeced by the DAG.
 ```
 usage: mkgs init [-h] [-t TARGET]
 

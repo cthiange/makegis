@@ -73,7 +73,7 @@ def cli():
             help="db instance to target",
         )
 
-    init_parser = subparsers.add_parser("init", help="initialize journal on target")
+    init_parser = subparsers.add_parser("init", help="create schemas and journal table")
     add_target_argument(init_parser)
     init_parser.set_defaults(func=init)
 
@@ -125,6 +125,9 @@ def init(args):
     assert target_id is not None
     log.info(f"using target {target_id}")
     target = Target(cfg.targets[target_id])
+
+    dag = Builder(cfg).build()
+    target.ensure_schemas(dag.list_schemas())
     target.init_journal()
 
 

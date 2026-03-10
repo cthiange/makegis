@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 from ..core.load import LoadJob
 from ..core.transforms import Transform
@@ -29,6 +30,12 @@ class Target:
     def init_journal(self):
         log.debug("initializing event table")
         self._inner.init_journal()
+
+    def ensure_schemas(self, schemas: List[str]):
+        """Ensure given schema names exist on target"""
+        for schema in schemas:
+            log.debug(f"ensuring schema '{schema}' exists on target")
+            self._inner.ensure_schema(schema)
 
     def fetch_manifest(self) -> Manifest:
         log.debug(f"fetching manifest from target")

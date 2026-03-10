@@ -185,6 +185,12 @@ class DAG:
 
         return outdated
 
+    def list_schemas(self) -> List[str]:
+        schemas = [dbo.schema for dbo in self._dbo2node.keys()]
+        schemas = list(set(schemas))
+        schemas.sort()
+        return schemas
+
     def render_node(self, node_id: str) -> str:
         """
         Render a DAG node to string.
