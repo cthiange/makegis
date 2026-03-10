@@ -172,8 +172,8 @@ def run(args):
 
     n = len(node_ids)
     with console.status("") as status:
-        for node_id in node_ids:
-            status.update(f"Running node 1/{n}: {node_id}")
+        for inode, node_id in enumerate(node_ids):
+            status.update(f"Running node {inode + 1}/{n}: {node_id}")
             if args.dry_run:
                 log.info(f"dry running node '{node_id}'")
                 continue
