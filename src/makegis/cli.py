@@ -23,7 +23,7 @@ def cli():
     # Handle general -v and -d options outside of argparse.
     args = sys.argv[1:]
     verbose_flags = ["-v", "--verbose"]
-    debug_flags = ["-d", "--debug"]
+    debug_flags = ["--debug"]
     debug = any([flag in args for flag in debug_flags])
     verbose = not debug and any([flag in args for flag in verbose_flags])
     args = [a for a in args if a not in verbose_flags + debug_flags]
@@ -59,9 +59,9 @@ def cli():
     # The --verbose and --debug options are parsed outside of argparse but we still declare
     # them here so they show up as general options in the generated help.
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose messages")
-    parser.add_argument("-d", "--debug", action="store_true", help="debug messages")
+    parser.add_argument("--debug", action="store_true", help="debug messages")
 
-    subparsers = parser.add_subparsers(dest="command", help="subcommand help")
+    subparsers = parser.add_subparsers(dest="command", help="commands")
 
     def add_target_argument(parser):
         parser.add_argument(
@@ -73,11 +73,15 @@ def cli():
             help="db instance to target",
         )
 
-    init_parser = subparsers.add_parser("init", help="initialize log tables on target")
+    init_parser = subparsers.add_parser("init", help="initialize journal on target")
     add_target_argument(init_parser)
     init_parser.set_defaults(func=init)
 
-    outdated_parser = subparsers.add_parser("outdated", help="list outdated nodes")
+    list_parser = subparsers.add_parser("ls", help="list nodes")
+    list_parser.add_argument("pattern", type=str, help="DAG selection pattern")
+    list_parser.set_defaults(func=show)
+
+    outdated_parser = subparsers.add_parser("outdated", help="report outdated nodes")
     add_target_argument(outdated_parser)
     outdated_parser.set_defaults(func=outdated)
 
@@ -85,15 +89,18 @@ def cli():
     run_parser.add_argument("pattern", type=str, help="DAG selection pattern")
     add_target_argument(run_parser)
     run_parser.add_argument(
+        "-d",
+        "--dry-run",
+        action="store_true",
+        help="process nodes without actually running them",
+    )
+    run_parser.add_argument(
+        "-f",
         "--force",
         action="store_true",
         help="also run fresh nodes",
     )
     run_parser.set_defaults(func=run)
-
-    show_parser = subparsers.add_parser("show", help="show nodes")
-    show_parser.add_argument("pattern", type=str, help="DAG selection pattern")
-    show_parser.set_defaults(func=show)
 
     # Load .env
     dotenv.load_dotenv(".env")
@@ -145,6 +152,10 @@ def run(args):
     log.info(f"using target {target_id}")
     target = Target(cfg.targets[target_id])
 
+    dry_run = args.dry_run == True
+    if args.dry_run:
+        log.info("dry run - target will not be modified")
+
     dag = Builder(cfg).build()
     node_ids = dag.select_nodes(args.pattern)
     if not node_ids:
@@ -163,6 +174,10 @@ def run(args):
     with console.status("") as status:
         for node_id in node_ids:
             status.update(f"Running node 1/{n}: {node_id}")
+            if args.dry_run:
+                log.info(f"dry running node '{node_id}'")
+                continue
+            log.info(f"running node '{node_id}'")
             try:
                 dag.run_node(node_id, target)
             except errors.FailedNodeRun as e:
@@ -171,7 +186,10 @@ def run(args):
             except Exception:
                 log.exception(f"node '{node_id}' run failed!")
                 return
-        print(f"Done. Ran {n} node(s).")
+        if args.dry_run:
+            print(f"Dry run done. Would've run {n} node(s).")
+        else:
+            print(f"Done. Ran {n} node(s).")
 
 
 def show(args):
