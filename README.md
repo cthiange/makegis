@@ -3,32 +3,64 @@
 
 A lightweight orchestrator for spatial databases.
 
-MakeGIS uses YAML files to describe DAG nodes that let you achieve one of three things:
+MakeGIS organizes workflows in a DAG whose nodes can be of three types:
+ - source nodes: load a dataset into a target database
+ - transform nodes: perform transforms within a target database
+ - custom nodes: run arbitrary commands
 
- - load data to a target database
- - transform data in a target database
- - run custom commands
-
-MakeGIS comes with a command line tool, `mkgs`, that operates on the resulting DAG.
+It comes with a command line tool, `mkgs`, that operates on the resulting DAG.
 
 Key features/choices:
 
  - Local and standalone: `mkgs` runs locally, no other service involved
- - Supports many data sources: describe where the data is, MakeGIS handles the rest
+ - Easy data loading: describe where the data is, MakeGIS handles the rest
  - Works for both ETL and ELT workflows
  - Automatic dependency discovery for SQL transforms
- - Flexible: run anything you want
- - Reproducible pipelines
- - Data lineage
+ - Support arbitrary code
+ - Event journal to keep track of database state
+ - Build DAG through code or from YAML files.
 
  > [!Note]
- > MakeGIS is under active development, expect breaking changes.
+ > MakeGIS is a young project and still exploring different approaches.
+ >
+ > In particular, the [Configuration](#configuration) docs in this readme reflect a somewhat opinionated way of organizing and declaring a DAG through `makegis.yaml` files.
+ > Alternative DAG-building paradigms are being explored.
 
 
 ## Installation
 
 `pip install makegis`
 
+MakeGIS relies on external tools, such as `ogr2ogr`, to be available.
+
+## Concept
+
+A quick overview of the main components underpinning MakeGIS
+
+### DAG
+
+The DAG organizes tasks.
+A DAG node owns one or more database objects (i.e. tables, views, functions, ...).
+A database object cannot be owned by more than one node.
+DAG nodes can depend on other DAG nodes.
+
+DAG nodes come in three types.
+*Source* nodes own a single database table and describe the data source of that table.
+*Tranfrom* nodes represent SQL to be run against a target database. The SQL statement are parsed to detect any dependencies (database object owned by other nodes).
+Finally, *custom* nodes wrap arbitrary commands.
+
+### Targets
+
+Targets handle all interecation with a database instance. This includes running nodes as well as writing to and reading from the journal (see below).
+
+### Journal
+
+MakeGIS keeps an event journal on each target database.
+This journal logs which nodes have been run, when, and with what version of MakeGIS.
+If the MakegGIS project is in a version control system (only git supported at this stage), then the version of the project is logged for each run too.
+
+The role of the journal is to detect stale or modified nodes that need to be rerun.
+See the [`mkgs outdated`](#mkgs-outdated) command.
 
 ## Usage
 
