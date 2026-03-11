@@ -209,7 +209,7 @@ class DAG:
         for dbo in node.deps:
             s += f"\t{dbo.full_name} -->\n"
         for dbo in node.owns:
-            s += f"\t--> {dbo.full_name}"
+            s += f"\t--> {dbo.full_name}\n"
         return s
 
     def select_nodes(self, pattern: str) -> List[str]:
