@@ -280,6 +280,8 @@ def run_action(action: Path, log_prefix: str):
         python_exe = sys.executable
         cmd.append(python_exe)
         cmd.append("-u")  # unbuffered mode to display logs as they appear
+        # Enable utf mode https://docs.python.org/3/library/os.html#utf8-mode
+        cmd.extend(["-X", "utf8"])
         cmd.append(action)
     else:
         raise NotImplementedError(f"unsupported action: {action}")
@@ -290,6 +292,7 @@ def run_action(action: Path, log_prefix: str):
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        encoding="utf-8",
     )
 
     capture_logs(process.stdout, log_prefix)
