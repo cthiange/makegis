@@ -46,7 +46,7 @@ def cli():
         handlers=[
             RichHandler(
                 console=console,
-                rich_tracebacks=True,
+                rich_tracebacks=False,
                 show_path=show_path,
                 show_time=show_time,
             )
