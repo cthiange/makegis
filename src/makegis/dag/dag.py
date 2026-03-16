@@ -1,3 +1,4 @@
+from makegis.errors import FailedNodeRun
 import logging
 import os
 import re
@@ -127,22 +128,19 @@ class DAG:
                     ret = run_action(action.path, f"prep {i}/{n}")
                     if ret == 0:
                         continue
-                    log.error(f"prep {i}/{n} {action} failed")
-                    raise RuntimeError("prep step failed")
+                    raise FailedNodeRun(f"prep {i}/{n} {action} failed")
                 for job in node.load:
                     target.load_table(job)
                 for i, action in enumerate(node.run):
                     ret = run_action(action.path, f"run {i}/{n}")
                     if ret == 0:
                         continue
-                    log.error(f"task {i}/{n} {action} failed")
-                    raise RuntimeError("run step failed")
+                    raise FailedNodeRun(f"task {i}/{n} {action} failed")
                 for i, action in enumerate(node.cleanup):
                     ret = run_action(action.path, f"cleanup {i}/{n}")
                     if ret == 0:
                         continue
-                    log.error(f"cleanup {i}/{n} {action} failed")
-                    raise RuntimeError("cleanup step failed")
+                    raise FailedNodeRun(f"cleanup {i}/{n} {action} failed")
         target.log_event(event)
 
     def get_outdated(
