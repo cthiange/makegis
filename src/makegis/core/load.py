@@ -61,6 +61,8 @@ class Destination:
     # Wether to index geometries or not.
     # Defaults to False to be conservative.
     geom_index: bool
+    # Load attributes only and skip geometry.
+    attributes_only: bool
     # Name to assign to raster column.
     raster_column: str
     # Wether to index raster bounds
@@ -68,7 +70,7 @@ class Destination:
     # Wether to set the standard set of raster constraints
     raster_constraints: bool
     # Raster tile size
-    tile_size: int | None 
+    tile_size: int | None
 
 
 @dataclass(frozen=True)

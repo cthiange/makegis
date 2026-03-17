@@ -24,6 +24,7 @@ class LoadDefaults(BaseModel):
     epsg: int | str | None = None
     geom_index: bool | None = None
     geom_column: str | None = None
+    attributes_only: bool | None = None
     raster_index: bool | None = None
     raster_column: str | None = None
     raster_constraints: bool | None = None
@@ -39,6 +40,7 @@ class BaseSourceBlock(BaseModel):
 class VectorSourceBlock(BaseModel):
     geom_index: bool | None = None
     geom_column: str | None = None
+    attributes_only: bool | None = None
 
 
 class CSVSourceBlock(BaseSourceBlock, VectorSourceBlock):

@@ -229,6 +229,7 @@ def prepare_load_job(
         epsg=dst_epsg,
         geom_index=dh.geom_index(item.src),
         geom_column=dh.geom_column(item.src),
+        attributes_only=dh.attributes_only(item.src),
         raster_index=dh.raster_index(item.src),
         raster_column=dh.raster_column(item.src),
         raster_constraints=dh.raster_constraints(item.src),
@@ -286,6 +287,9 @@ class LoadDefaultHandler:
 
     def geom_column(self, src: SourceBlock) -> str | None:
         return self._fallback(src, "geom_column")
+
+    def attributes_only(self, src: SourceBlock) -> str | None:
+        return self._fallback(src, "attributes_only")
 
     def raster_index(self, src: SourceBlock) -> bool:
         return self._fallback(src, "raster_index")

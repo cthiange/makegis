@@ -211,7 +211,7 @@ def ddb2pg(conn_str: str, src: DuckDBSource, dst: Destination, launder=True):
 
     statement = f"create or replace table pg.{dst.schema}.{dst.table} as select"
     for i, col, dtype, not_null, default, pk in columns:
-        if dtype == "GEOMETRY":
+        if dtype == "GEOMETRY" and not dst.attributes_only:
             # Convert geometry to hexwkb for PostGIS
             statement += f"\n    st_ashexwkb({col}) as {format_column(col)},"
         else:
@@ -248,7 +248,7 @@ def ddb2pg(conn_str: str, src: DuckDBSource, dst: Destination, launder=True):
                     )
                 )
             # Process geo columns
-            if dtype == "GEOMETRY":
+            if dtype == "GEOMETRY" and not dst.attributes_only:
                 _process_duckdb_geo_column(
                     conn,
                     table,
@@ -440,6 +440,8 @@ def load_wfs(
         options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
+    if dst.attributes_only:
+        options += f" -nlt NONE"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
     options += " -overwrite"
     if dst.geom_index:
@@ -475,6 +477,8 @@ def load_gdb(
         options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
+    if dst.attributes_only:
+        options += f" -nlt NONE"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
     options += " -overwrite"
     if dst.geom_index:
@@ -509,6 +513,8 @@ def load_shp(
         options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
+    if dst.attributes_only:
+        options += f" -nlt NONE"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
     options += " -overwrite"
     options += " -nlt PROMOTE_TO_MULTI"
@@ -544,6 +550,8 @@ def load_esri(
         options += f" -s_srs EPSG:{src.epsg}"
     if dst.epsg is not None:
         options += f" -t_srs EPSG:{dst.epsg}"
+    if dst.attributes_only:
+        options += f" -nlt NONE"
     options += " --config OGR_PG_ENABLE_METADATA=NO"
     options += " -overwrite"
     options += " -nlt PROMOTE_TO_MULTI"

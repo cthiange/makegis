@@ -46,6 +46,7 @@ def test_process_load_block():
     assert job.dst.epsg == 3857
     assert job.dst.geom_index is True
     assert job.dst.geom_column is None
+    assert job.dst.attributes_only is None
 
 
 def test_process_load_block__item_with_explicit_none_column():
