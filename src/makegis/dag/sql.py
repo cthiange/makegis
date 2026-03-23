@@ -75,12 +75,16 @@ class State:
     def alter(self, target: DBO):
         # Ensure this table was created by this script.
         if target not in self.news and target not in self.tx_news:
-            raise NotImplementedError("Altering existing tables not supported yet")
+            raise NotImplementedError(
+                f"Altering existing tables not supported yet ({target})"
+            )
 
     def update(self, target: DBO, deps: Set[DBO]):
         # Ensure this table was created by this script.
         if target not in self.news and target not in self.tx_news:
-            raise NotImplementedError("Updating existing tables not supported yet")
+            raise NotImplementedError(
+                f"Updating existing tables not supported yet ({target})"
+            )
         # Add deps
         self.deps |= deps
 
