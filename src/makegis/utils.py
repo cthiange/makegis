@@ -9,7 +9,7 @@ def capture_logs(stream, log_prefix: str):
 
     if stream is not None:
         for line in stream:
-            msg = f"[{log_prefix}] {line.strip()}"
+            msg = f"[{log_prefix}] {line.rstrip()}"
             lower_line = line.lower()
             if traceback or "error" in line.lower():
                 log.error(msg)
