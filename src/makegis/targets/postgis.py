@@ -158,6 +158,20 @@ class PostgisTarget:
                 row[0]: row[1].replace(tzinfo=timezone.utc).astimezone() for row in rows
             }
 
+    def add_to_environment(self):
+        """
+        Expose host, port, dbname and user as environment variables.
+        """
+        assert "MKGS_TARGET_HOST" not in os.environ
+        assert "MKGS_TARGET_PORT" not in os.environ
+        assert "MKGS_TARGET_DBNAME" not in os.environ
+        assert "MKGS_TARGET_USER" not in os.environ
+
+        os.environ["MKGS_TARGET_HOST"] = self.host
+        os.environ["MKGS_TARGET_PORT"] = str(self.port)
+        os.environ["MKGS_TARGET_DBNAME"] = self.db
+        os.environ["MKGS_TARGET_USER"] = self.user
+
 
 class Table:
 

@@ -155,6 +155,8 @@ def run(args):
     log.info(f"using target {target_id}")
     target = Target(cfg.targets[target_id])
 
+    target.add_to_environment()
+
     dry_run = args.dry_run == True
     if args.dry_run:
         log.info("dry run - target will not be modified")

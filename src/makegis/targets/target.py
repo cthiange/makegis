@@ -45,3 +45,10 @@ class Target:
         log.debug("logging run to journal")
         record = event.to_record(self._cfg.user)
         self._inner.log_event(record)
+
+    def add_to_environment(self):
+        """
+        Sets MKGS_TARGET_* environment variables exposing target config.
+        """
+        log.debug("adding target to environment")
+        self._inner.add_to_environment()
