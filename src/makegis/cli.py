@@ -1,7 +1,9 @@
 import argparse
+from datetime import timedelta
 import logging
 from pathlib import Path
 import sys
+import time
 
 import dotenv
 from rich.console import Console
@@ -177,6 +179,7 @@ def run(args):
 
     n = len(node_ids)
     with console.status("") as status:
+        t_start = time.time()
         for inode, node_id in enumerate(node_ids):
             status.update(f"Running node {inode + 1}/{n}: {node_id}")
             if args.dry_run:
@@ -194,7 +197,8 @@ def run(args):
         if args.dry_run:
             print(f"Dry run done. Would've run {n} node(s).")
         else:
-            print(f"Done. Ran {n} node(s).")
+            duration = timedelta(seconds=time.time() - t_start)
+            print(f"Done. Ran {n} node(s) in {duration}")
 
 
 def show(args):
