@@ -1,11 +1,7 @@
 ---
-src_dir: ./src
-
+# no explicit project-wide defaults
 defaults:
   load:
-    epsg: 4326
-    geom_index: false
-  target: pg_dev
 
 targets:
   pg_prod:

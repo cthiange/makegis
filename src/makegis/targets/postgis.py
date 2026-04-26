@@ -8,7 +8,7 @@ import duckdb
 import psycopg
 from psycopg import sql
 
-from ..config.root import TargetConfig
+from ..config.project import TargetConfig
 from ..core.load import CSVSource
 from ..core.load import Destination
 from ..core.load import DuckDBSource
@@ -58,7 +58,7 @@ class PostgisTarget:
                             f"Loading {job.src.path.suffix} files is not supported yet"
                         )
             case RasterSource():
-                raster2pgsql(target, job.src, job.dst)
+                raster2pgsql(self, job.src, job.dst)
             case _:
                 raise NotImplementedError
 
@@ -176,8 +176,8 @@ class PostgisTarget:
 class Table:
 
     def __init__(self, dst: Destination):
-        schema = dst.schema
-        name = dst.table
+        schema = dst.table_schema
+        name = dst.table_name
         self._schema = schema
         self._name = name
         self.ident = sql.Identifier(schema, name)
@@ -202,7 +202,7 @@ class Column:
 # Helper function to load a single table from DuckDB to Postgres
 def ddb2pg(conn_str: str, src: DuckDBSource, dst: Destination, launder=True):
     log.info(
-        f"postgis - loading duckdb table from {src.path}:{src.table} to {dst.schema}.{dst.table}"
+        f"postgis - loading duckdb table from {src.path}:{src.table} to {dst.table_schema}.{dst.table_name}"
     )
     if src.pk is not None:
         raise NotImplementedError("Explicit PK not implemented for DuckDB sources")
@@ -223,7 +223,7 @@ def ddb2pg(conn_str: str, src: DuckDBSource, dst: Destination, launder=True):
     # https://duckdb.org/docs/configuration/pragmas.html#table-information
     columns = db.sql(f"pragma table_info('src.{src.table}');").fetchall()
 
-    statement = f"create or replace table pg.{dst.schema}.{dst.table} as select"
+    statement = f"create or replace table pg.{dst.table_schema}.{dst.table_name} as select"
     for i, col, dtype, not_null, default, pk in columns:
         if dtype == "GEOMETRY" and not dst.attributes_only:
             # Convert geometry to hexwkb for PostGIS
@@ -417,13 +417,13 @@ def _column_has_index(
 
 def load_csv(
     conn_str: str,
-    src: FileSource,
+    src: CSVSource,
     dst: Destination,
 ):
     db = duckdb.connect()
     db.sql(f"attach '{conn_str}' as pg (TYPE postgres);")
     db.sql(f"""
-        create or replace table pg.{dst.schema}.{dst.table} as
+        create or replace table pg.{dst.table_schema}.{dst.table_name} as
             select * from '{src.path}';
         """)
     db.close()
@@ -431,7 +431,7 @@ def load_csv(
     with psycopg.connect(conn_str) as conn:
         if src.pk is not None:
             conn.execute(
-                f"alter table {dst.schema}.{dst.table} add primary key ({src.pk})"
+                f"alter table {dst.table_schema}.{dst.table_name} add primary key ({src.pk})"
             )
 
 
@@ -446,7 +446,7 @@ def load_wfs(
     cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
     cmd += f' WFS:"{src.url}"'
     options = ""
-    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += f' -nln "{dst.table_schema}.{dst.table_name}"'
     options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
@@ -464,7 +464,7 @@ def load_wfs(
         options += " -lco SPATIAL_INDEX=NONE"
     cmd += options
 
-    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
     log.debug(f"return code: {ret}")
     if ret != 0:
         raise FailedNodeRun("loading wfs source failed with code {ret}")
@@ -482,7 +482,7 @@ def load_gdb(
     assert src.layer is not None
     cmd += f' "{src.path}" "{src.layer}"'
     options = ""
-    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += f' -nln "{dst.table_schema}.{dst.table_name}"'
     options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     options += " -progress"
     if dst.geom_column is not None:
@@ -501,7 +501,7 @@ def load_gdb(
         options += " -lco SPATIAL_INDEX=NONE"
     cmd += options
 
-    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
     log.debug(f"return code: {ret}")
     if ret != 0:
         raise FailedNodeRun("loading gdb source failed with code {ret}")
@@ -518,7 +518,7 @@ def load_shp(
     cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
     cmd += f' "{src.path}" '
     options = ""
-    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += f' -nln "{dst.table_schema}.{dst.table_name}"'
     options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     options += " -progress"
     if dst.geom_column is not None:
@@ -538,7 +538,7 @@ def load_shp(
         options += " -lco SPATIAL_INDEX=NONE"
     cmd += options
 
-    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
     log.debug(f"return code: {ret}")
     if ret != 0:
         raise FailedNodeRun("loading shapefile source failed with code {ret}")
@@ -556,7 +556,7 @@ def load_esri(
     # This will do for now but might want to expose more query parameters
     cmd += f' "{src.url}/query?where=1=1&outFields=*&f={src.f}"'
     options = ""
-    options += f' -nln "{dst.schema}.{dst.table}"'
+    options += f' -nln "{dst.table_schema}.{dst.table_name}"'
     options += f" -lco FID={'gid' if src.pk is None else src.pk}"
     if dst.geom_column is not None:
         options += f" -lco GEOMETRY_NAME={dst.geom_column}"
@@ -577,7 +577,7 @@ def load_esri(
     options += " -oo FEATURE_SERVER_PAGING=YES"
     cmd += options
 
-    ret = run_ogr_cmd(cmd, f"{dst.schema}.{dst.table}")
+    ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
     log.debug(f"return code: {ret}")
     if ret != 0:
         raise FailedNodeRun(f"loading esri source failed with code ({ret})")
@@ -635,7 +635,7 @@ def raster2pgsql(
     if dst.raster_constraints:
         options += ["-C"]
 
-    r2p_cmd = [r2p] + options + [src.path, f"{dst.schema}.{dst.table}"]
+    r2p_cmd = [r2p] + options + [src.path, f"{dst.table_schema}.{dst.table_name}"]
 
     psql_cmd = [
         psql,
@@ -661,7 +661,7 @@ def raster2pgsql(
         bufsize=1,
     )
 
-    label = f"{dst.schema}.{dst.table}"
+    label = f"{dst.table_schema}.{dst.table_name}"
     capture_logs(psql_process.stdout, f"load {label}")
 
     ret = r2p_process.wait()

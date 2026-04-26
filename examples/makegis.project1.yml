@@ -1,10 +1,12 @@
 ---
-src_dir: ./src
-
-# no explicit defaults
+defaults:
+  load:
+    epsg: 4326
+    geom_index: false
+  target: pg_dev
 
 targets:
-  pg_prod:
+  og_prod:
     host: prod.example.com
     port: 5432
     user: mkgs

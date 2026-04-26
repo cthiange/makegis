@@ -23,8 +23,7 @@ Key features/choices:
  > [!Note]
  > MakeGIS is a young project and still exploring different approaches.
  >
- > In particular, the [Configuration](#configuration) docs in this readme reflect a somewhat opinionated way of organizing and declaring a DAG through `makegis.yaml` files.
- > Alternative DAG-building paradigms are being explored.
+ > Breaking changes are likely and documention may be sparse.
 
 
 ## Installation
@@ -140,9 +139,9 @@ options:
 
 ## Configuration
 
-Makegis is configured through YAML configuration files and environment variables.
+A MakeGIS project is configured through YAML configuration files and environment variables.
 
-A `makegis.root.yml` file defines the root of a MakeGIS project, along with project-wide settings.
+A `makegis.project.yml` file defines the root of a MakeGIS project, along with project-wide settings.
 MakeGIS will traverse the directory tree and look for any `makegis.yml` files.
 
 An example project may look like this:
@@ -150,38 +149,35 @@ An example project may look like this:
 ```
 project/
 ├─ src/
-|  ├─ raw/
-|  │  ├─ provider/
-|  │  │  └─ makegis.yml
-|  |  └─ makegis.yml
-|  └─ core/
-|     ├─ transform_1.sql
-|     ├─ transform_2.sql
-|     ├─ transform_3.sql
-|     └─ makegis.yml
+│  ├─ raw/
+│  │  ├─ provider/
+│  │  │  └─ makegis.yml
+│  │  └─ makegis.yml
+│  └─ core/
+│     ├─ transform_1.sql
+│     ├─ transform_2.sql
+│     ├─ transform_3.sql
+│     └─ makegis.yml
 ├─ .env
 ├─ .gitignore
-└─ makegis.root.yml
+└─ makegis.project.yml
 ```
 
-> [!Note]  
+> [!Note]
 > **Environment variables** can be used by enclosing them in double curly brackets: `{{ EXAMPLE }}`. MakeGIS will consider any `.env` files in the project tree.
 
-### makegis.root.yml
+### makegis.project.yml
 
-A `makegis.root.yml` file defines the root of a MakeGIS project along with project wide settings. Here's an annotated example:
+A `makegis.project.yml` file defines the root of a MakeGIS project along with project wide settings. Here's an annotated example:
 
 ```yaml
-# The project's root directory.
-src_dir: ./src
-
 # Global defaults
 defaults:
-  # Global defaults for `load` nodes
+  # Global defaults for `load` sources
   load:
     epsg: 4326
     geom_index: false
-  # Optional default target (to use we running mkgs without a `--target` option)
+  # Optional default target (to use when running mkgs without a `--target` option)
   target: pg_dev
 
 # Databases to target
@@ -202,32 +198,36 @@ targets:
 
 The path of a `makegis.yml` determines the database relations they manage, whith top-level directories mapping to schemas.
 
-A `makegis.yml` contains one of the following configuration blocks:
+A `makegis.yml` contains one or more configuration groups.
+A configuration can have an optional `name` and at least one of the following keys:
 
+- defaults: defines group-level defaults, overriding project-level values if needed
 - load: defines sources to be loaded to a target
-- transform: defines transforms to be applied to a target
-- node: custom node to run bespoke commands
+- custom: custom nodes to run bespoke commands
+- transform: defines SQL transforms to be applied to a target
 
 #### Load block
 
 Maps tables to external data sources.
-Each table becomes a DAG node and can be invoked individually
+Each table becomes a DAG node and can be invoked individually.
 
 ```yaml
-load:
-  <table-name>:
-    <loader>: <loader-arg>
-    <loader-option>: <option-value>
-    <loader-option>: <option-value>
+- name: group1
+  load:
+    <table-name>:
+      <loader>: <loader-arg>
+      <loader-option>: <option-value>
+      <loader-option>: <option-value>
     ...
 ```
 
 ```yaml
-load:
-  countries:
-    wfs: https://wfs.example.com/countries?token={{API_KEY}}
-    epsg: 4326
-    geom_index: true
+- name: group1
+  load:
+    countries:
+      wfs: https://wfs.example.com/countries?token={{API_KEY}}
+      epsg: 4326
+      geom_index: true
 ```
 
 TODO: Document loaders and their options.
@@ -255,44 +255,44 @@ Declares sql scripts to be enrolled.
 Each script becomes a DAG node.
 Dependencies with other DAG nodes are resolved automatically.
 The order in which sql scripts are listed does not matter.
-There are no constraints on what is in the sql scripts, as long as MakeGIS is aware of all dependencies.
+There are no constraints on the content of the sql scripts, as long as MakeGIS can resolve all dependencies.
 
 ```yaml
-transform:
-  - create_view_of_awesome_table.sql
-  - create_awesome_table.sql
+- name: group1
+  transform:
+    - create_view_of_awesome_table.sql
+    - create_awesome_table.sql
 ```
 
-#### Node block
+#### Custom block
 
-A `node` block defines a custom DAG node, for when more flexibility is needed than offered by a `load` or `tranform` block.
+A `custom` block defines one or more custom DAG nodes, for when more flexibility is needed than offered by a `load` or `sql` block.
 
 The price to pay for more flexibility is that dependencies need to be documented manually. This goes for upstream dependecies as well as objects created on the target db.
 
+TODO: update
+
 ```yaml
-node:
-  # List any relations needed by this node.
-  deps:
-    - schema.upstream_table
-  # Commands that do not change the target db but need to be run before we proceed.
-  # Commands are run sequentially, in listing order.
-  prep:
-    - before.py
-  # Main section
-  do:
-    # List of commands along with any objects they will create on the target.
-    run:
-      - cmd: script1.py
-        # Declare objects owned by this command
-        creates:
-          - table: new_table
-          - function: helper
-    # Can also use a load block here, but it won't spawn new DAG nodes
-    <load-block>
-  # Like prep, but runs after `do`, and only if `do` runs fine.
-  post:
-    - after.py
-  # Like post but always runs, even if something failed prior.
-  finally:
-    - teardown.py
+- name: group1
+  custom:
+    - name: optional_node_name
+      # List any relations needed by this node.
+      deps:
+        - table: schema.upstream_table
+      # Commands that do not change the target db but need to be run before we proceed.
+      # Commands are run sequentially, in listing order.
+      prep:
+        - before.py
+      # List of commands along with any objects they will create on the target.
+      run:
+        - cmd: script1.py
+          # Declare objects owned by this command
+          creates:
+            - table: new_table
+            - function: helper
+      # Can also use a load block here, but it won't spawn new DAG nodes
+      <load-block>
+      # Like prep, but runs after `run` and/or `load`.
+      post:
+        - teardown.py
 ```

@@ -1,2 +1,2 @@
-from .root import RootConfig
-from .root import TargetConfig
+from .project import Project
+from .project import ProjectFile

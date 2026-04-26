@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from . import __version__
-from .config import RootConfig
+from .config import Project
 from .dag.builder import Builder
 from .targets import Target
 from . import errors
@@ -122,25 +122,25 @@ def cli():
 
 
 def init(args):
-    cfg = load_root_config()
-    target_id = args.target or cfg.defaults.target
+    project = load_project()
+    target_id = args.target or project.defaults.target
     assert target_id is not None
     log.info(f"using target {target_id}")
-    target = Target(cfg.targets[target_id])
+    target = Target(project.targets[target_id])
 
-    dag = Builder(cfg).build()
+    dag = Builder.build_project(project)
     target.ensure_schemas(dag.list_schemas())
     target.init_journal()
 
 
 def outdated(args):
-    cfg = load_root_config()
-    target_id = args.target or cfg.defaults.target
+    project = load_project()
+    target_id = args.target or project.defaults.target
     assert target_id is not None
     log.info(f"using target {target_id}")
-    target = Target(cfg.targets[target_id])
+    target = Target(project.targets[target_id])
 
-    dag = Builder(cfg).build()
+    dag = Builder.build_project(project)
     node_ids = dag.get_outdated(target)
     if not node_ids:
         print("All nodes are up to date.")
@@ -150,20 +150,19 @@ def outdated(args):
 
 
 def run(args):
-    cfg = load_root_config()
+    project = load_project()
 
-    target_id = args.target or cfg.defaults.target
+    target_id = args.target or project.defaults.target
     assert target_id is not None
     log.info(f"using target {target_id}")
-    target = Target(cfg.targets[target_id])
+    target = Target(project.targets[target_id])
 
     target.add_to_environment()
 
-    dry_run = args.dry_run == True
     if args.dry_run:
         log.info("dry run - target will not be modified")
 
-    dag = Builder(cfg).build()
+    dag = Builder.build_project(project)
     node_ids = dag.select_nodes(args.pattern)
     if not node_ids:
         print("No nodes matching selection pattern.")
@@ -202,8 +201,8 @@ def run(args):
 
 
 def show(args):
-    cfg = load_root_config()
-    dag = Builder(cfg).build()
+    project = load_project()
+    dag = Builder.build_project(project)
     node_ids = dag.select_nodes(args.pattern)
     if not node_ids:
         print("No matching nodes.")
@@ -213,28 +212,31 @@ def show(args):
         print(dag.render_node(node_id))
 
 
-def load_root_config():
-    cfg_path = find_root_config()
+def load_project() -> Project:
+    prj_path = find_project_file()
 
-    # Load .env in same dir as makegis.root.yml
-    cfg_dir = cfg_path.parent
-    dotenv.load_dotenv(cfg_dir / ".env")
+    # Load .env in same dir as project file
+    prj_dir = prj_path.parent
+    dotenv.load_dotenv(prj_dir / ".env")
 
-    return RootConfig.from_file(cfg_path)
+    project = Project(prj_path)
+    project.load()
+    return project
 
 
-def find_root_config(cwd: Path = Path(".").resolve()):
+def find_project_file(cwd: Path = Path(".").resolve()):
     """
-    Returns path to first makegis.root.yml file found in current dir or parents.
+    Returns path to first makegis.project.y(a)ml file found in current dir or its parents.
     """
-    path = cwd / "makegis.root.yml"
-    if path.exists():
-        return path
+    paths = [cwd / "makegis.project.yml", cwd / "makegis.project.yaml"]
+    for path in paths:
+        if path.exists():
+            return path
     parent = cwd.parent
     if parent == cwd:
-        log.error("Found no makegis root file in current directory or its parents.")
+        log.error("Found no makegis project file in current directory or its parents.")
         exit(1)
-    return find_root_config(cwd=parent)
+    return find_project_file(cwd=parent)
 
 
 if __name__ == "__main__":

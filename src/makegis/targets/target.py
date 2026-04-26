@@ -3,7 +3,7 @@ from typing import List
 
 from ..core.load import LoadJob
 from ..core.transforms import Transform
-from ..config.root import TargetConfig
+from ..config.project import TargetConfig
 from ..journal import RunEvent
 from ..journal import Manifest
 from .postgis import PostgisTarget

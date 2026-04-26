@@ -1,4 +1,0 @@
-transform:
-  - table_a.sql
-  - table_b.sql
-  - table_c.sql

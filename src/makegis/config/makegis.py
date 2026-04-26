@@ -1,13 +1,12 @@
 import logging
 from pathlib import Path
+from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic import model_validator
-from pydantic import ValidationError
 import yaml
 
 try:
@@ -15,241 +14,158 @@ try:
 except ImportError:
     from yaml import Loader
 
-from .utils import expand_dict_strings
 
 log = logging.getLogger("makegis")
 
 
-class LoadDefaults(BaseModel):
+class CommonOptions(BaseModel):
     epsg: int | str | None = None
+    # Name of column to use as primary key
+    pk: str | None = None
+
+
+class VectorOptions(BaseModel):
     geom_index: bool | None = None
     geom_column: str | None = None
     attributes_only: bool | None = None
+
+
+class RasterOptions(BaseModel):
     raster_index: bool | None = None
     raster_column: str | None = None
     raster_constraints: bool | None = None
     tile_size: int | None = None
 
 
-class BaseSourceBlock(BaseModel):
-    epsg: int | str | None = None
-    # Name of column to use as primary key
-    pk: str | None = None
+class LoadDefaults(CommonOptions, VectorOptions, RasterOptions):
+    pass
 
 
-class VectorSourceBlock(BaseModel):
-    geom_index: bool | None = None
-    geom_column: str | None = None
-    attributes_only: bool | None = None
+class Defaults(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    load: LoadDefaults | None = None
 
 
-class CSVSourceBlock(BaseSourceBlock, VectorSourceBlock):
-    type: Literal["csv"] = "csv"
-    path: Path
+class BaseSource(CommonOptions):
+    meta: Dict[str, str | int | float | None] | None = {}
+    epsg: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CSVSource(BaseSource, VectorOptions):
+    csv: Path
     # TODO:
     # x_column: str | None = None
     # y_column: str | None = None
     # keep_xy_columns: bool = False
 
 
-class EsriSourceBlock(BaseSourceBlock, VectorSourceBlock):
-    type: Literal["esri"] = "esri"
-    url: str
-    f: Literal["pjson", "pgeojson"] = "pjson"
+class DuckDBSource(BaseSource, VectorOptions):
+    duckdb: Path
+    table: str | None = None
 
 
-class DuckDBSourceBlock(BaseSourceBlock, VectorSourceBlock):
-    type: Literal["duckdb"] = "duckdb"
-    path: Path
-    table: Optional[str] = None
+class EsriSource(BaseSource, VectorOptions):
+    esri: str
+    f: Literal["pgeojson", "pjson"] = "pjson"
 
 
-class FileSourceBlock(BaseSourceBlock, VectorSourceBlock):
-    type: Literal["file"] = "file"
-    path: Path
+class FileSource(BaseSource, VectorOptions):
+    file: Path
     layer: str | None = None
 
 
-class RasterSourceBlock(BaseSourceBlock):
-    type: Literal["raster"] = "raster"
-    path: Path
-    raster_index: bool | None = None
-    raster_column: str | None = None
-    raster_constraints: bool | None = None
-    tile_size: int | None = None
+class RasterSource(BaseSource, RasterOptions):
+    raster: Path
 
 
-class WFSSourceBlock(BaseSourceBlock, VectorSourceBlock):
-    type: Literal["wfs"] = "wfs"
-    url: str
+class WFSSource(BaseSource, VectorOptions):
+    wfs: str
 
 
-type SourceBlock = CSVSourceBlock | EsriSourceBlock | DuckDBSourceBlock | FileSourceBlock | RasterSourceBlock | WFSSourceBlock
-
-SOURCE_KEYS = set(["csv", "esri", "duckdb", "file", "raster", "wfs"])
-
-
-class LoadItem(BaseModel):
-    name: str
-    src: SourceBlock
-    meta: Dict[str, str | int | float | None]
-
-    @classmethod
-    def from_kv(cls, k: str, v: Dict):
-        name = k
-        meta = v.pop("meta", {})
-        matched_source_keys = [sk for sk in SOURCE_KEYS if sk in v]
-        if len(matched_source_keys) == 0:
-            raise RuntimeError(
-                f"Missing source key in load block item, execting one of {SOURCE_KEYS}"
-            )
-        elif len(matched_source_keys) > 1:
-            raise RuntimeError(
-                f"Too many source keys in load block item, expecting exactly one of {SOURCE_KEYS}"
-            )
-        if "csv" in matched_source_keys:
-            path = v.pop("csv")
-            src = CSVSourceBlock(path=path, **v)
-        elif "esri" in matched_source_keys:
-            url = v.pop("esri")
-            src = EsriSourceBlock(url=url, **v)
-        elif "duckdb" in matched_source_keys:
-            path = v.pop("duckdb")
-            src = DuckDBSourceBlock(path=path, **v)
-        elif "file" in matched_source_keys:
-            path = v.pop("file")
-            src = FileSourceBlock(path=path, **v)
-        elif "raster" in matched_source_keys:
-            path = v.pop("raster")
-            src = RasterSourceBlock(path=path, **v)
-        elif "wfs" in matched_source_keys:
-            url = v.pop("wfs")
-            src = WFSSourceBlock(url=url, **v)
-        else:
-            raise NotImplementedError("Unhandled source key in load block item")
-
-        return LoadItem(name=name, src=src, meta=meta)
-
-
-class SQLTransform(BaseModel):
-    path: Path
-
-
-class LoadBlock(BaseModel):
-    defaults: LoadDefaults
-    items: List[LoadItem]
-
-    @classmethod
-    def from_dict(cls, d: Dict):
-        defaults = LoadDefaults(**d.pop("defaults", {}))
-        items = [LoadItem.from_kv(k, v) for k, v in d.items()]
-        return LoadBlock(defaults=defaults, items=items)
-
-
-class TransformBlock(BaseModel):
-    transforms: List[SQLTransform]
-
-    @classmethod
-    def from_sequence(cls, s: List):
-        transforms = [SQLTransform(path=p) for p in s]
-        return TransformBlock(transforms=transforms)
+LoadItem = CSVSource | DuckDBSource | EsriSource | FileSource | RasterSource | WFSSource
 
 
 class DatabaseItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     type: Literal["table", "function"]
     name: str
 
+    @model_validator(mode="before")
     @classmethod
-    def from_dict(cls, d: Dict):
-        assert (
-            len(d) == 1
-        ), "each item in a 'creates' or 'deps' block must have exactly 1 key e.g. - table: name"
-        k, v = next(iter(d.items()))
-        return DatabaseItem(type=k, name=v)
+    def desugar(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            assert len(data) == 1
+            if "table" in data:
+                tpe = "table"
+            elif "function" in data:
+                tpe = "function"
+            return {"type": tpe, "name": data[tpe]}
 
 
 class RunTask(BaseModel):
-    cmd: str
+    cmd: Path
     creates: List[DatabaseItem]
 
+
+class CustomNode(BaseModel):
+    # Optional local name
+    name: str | None = None
+    deps: list[DatabaseItem] | None = None
+    prep: list[Path] | None = []
+
+    load: dict[str, LoadItem] | None = None
+    run: list[RunTask] | None = None
+    cleanup: List[Path] | None = None
+
+
+class Group(BaseModel):
+    name: str | None = None
+    defaults: Defaults | None = None
+    load: dict[str, LoadItem] | None = None
+    transform: list[Path | dict[str, Path]] | None = None
+    custom: list[CustomNode] | None = None
+
+    @field_validator("transform", mode="after")
     @classmethod
-    def from_dict(cls, d: Dict):
-        creates = [DatabaseItem.from_dict(item) for item in d.pop("creates", [])]
-        return RunTask(creates=creates, **d)
+    def ensure_single_sql_maps(cls, value: Path | dict[str, Path]):
+        """
+        A sql item can be path or name:path mapping.
+        This validator checks that dict items contain exactly 1 mapping.
+
+        ```yaml
+        - sql:
+            - path_one.sql           # path only, ok
+            - two: path_two.sql      # single name:path, ok
+            - this: is.sql           # map > 1, not ok
+              not: allowed.sql
+        ```
+        """
+        if isinstance(value, dict) and len(value) != 1:
+            raise ValueError("sql name:path mapping is not of length 1")
+        return value
 
 
-class DoBlock(BaseModel):
-    """The 'do' key in a 'node' block"""
+class ConfigFile(BaseModel):
+    """A makegis.yml file and its contents"""
 
-    load: Optional[LoadBlock] = None
-    run: Optional[List[RunTask]] = None
-
-    @model_validator(mode="after")
-    def at_least_one(self):
-        if self.load is None and self.run is None:
-            raise ValidationError(
-                "A node's do block must have a 'load' and/or a 'run' key"
-            )
-        return self
-
-    @classmethod
-    def from_dict(cls, d: Dict):
-        load, tasks = None, None
-        if "load" in d:
-            load = LoadBlock.from_dict(d["load"])
-        if "run" in d:
-            tasks = [RunTask.from_dict(t) for t in d["run"]]
-        return DoBlock(load=load, run=tasks)
-
-
-class NodeBlock(BaseModel):
-    """Top-level 'node' block in a makegis.yml file"""
-
-    deps: List[DatabaseItem] | None = []
-    prep: List[str] | None = []
-    do: DoBlock
-    post: List[str] | None = []
-    cleanup: List[str] | None = []
-
-    @classmethod
-    def from_dict(cls, d: Dict):
-        deps = [DatabaseItem.from_dict(d) for d in d.pop("deps", [])]
-        do = DoBlock.from_dict(d.pop("do"))
-        return NodeBlock(deps=deps, do=do, **d)
-
-
-class MakeGISConfig(BaseModel):
-    block: LoadBlock | TransformBlock | NodeBlock
-    type: Literal["load", "transform", "node"]
+    path: Path
+    groups: list[Group]
 
     @classmethod
-    def from_file(cls, path: Path):
+    def from_path(cls, path: Path):
         log.debug(f"reading {path}")
         with open(path) as f:
-            d = yaml.load(f, Loader)
-        return cls.from_dict(d)
+            ls = yaml.load(f, Loader)
+        return cls.from_list(path, ls)
 
     @classmethod
-    def from_yaml(cls, s: str):
-        d = yaml.load(s, Loader)
-        return cls.from_dict(d)
+    def from_yaml(cls, path: Path, s: str):
+        ls = yaml.load(s, Loader)
+        return cls.from_list(path, ls)
 
     @classmethod
-    def from_dict(cls, d: Dict):
-        expand_dict_strings(d)
-        assert len(d) == 1
-        key = list(d)[0]
-        if key == "load":
-            typ = "load"
-            block = LoadBlock.from_dict(d["load"])
-        elif key == "transform":
-            typ = "transform"
-            block = TransformBlock.from_sequence(d["transform"])
-        elif key == "node":
-            typ = "node"
-            block = NodeBlock.from_dict(d["node"])
-        else:
-            raise RuntimeError(
-                f"Unknown makegis file key '{key}', should be one of load, transform or node"
-            )
-        return MakeGISConfig(type=typ, block=block)
+    def from_list(cls, path: Path, ls: list):
+        groups = [Group(**item) for item in ls]
+        return cls(path=path, groups=groups)

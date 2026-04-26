@@ -72,7 +72,7 @@ class DAG:
 
     def __init__(self, nodes: List[Node]):
         # Node id to node lookup
-        self._nodes: Dict[str, Node] = {}
+        self._nodes: dict[str, Node] = {}
         # Database object to node lookup
         self._dbo2node: Dict[DatabaseObject, Node] = {}
         # DAG graph - maps node id to parent node ids
