@@ -48,7 +48,7 @@ class Defaults(BaseModel):
 
 class BaseSource(CommonOptions):
     meta: Dict[str, str | int | float | None] | None = {}
-    epsg: int | None = None
+    epsg: int | str | None = None
 
     model_config = ConfigDict(extra="forbid")
 
