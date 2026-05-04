@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic import model_validator
 import yaml
 
+from .utils import expand_dict_strings
+
 try:
     from yaml import CLoader as Loader
 except ImportError:
@@ -167,5 +169,5 @@ class ConfigFile(BaseModel):
 
     @classmethod
     def from_list(cls, path: Path, ls: list):
-        groups = [Group(**item) for item in ls]
+        groups = [Group(**expand_dict_strings(item)) for item in ls]
         return cls(path=path, groups=groups)
