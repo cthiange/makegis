@@ -223,7 +223,7 @@ class ProjectFile(BaseModel):
 
     @classmethod
     def from_dict(cls, path: Path, d: dict):
-        expand_dict_strings(d)
+        d = expand_dict_strings(d)
         d["path"] = path
         return ProjectFile(**d)
 

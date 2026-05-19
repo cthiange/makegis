@@ -1,3 +1,5 @@
+import os
+
 from makegis.config.makegis import DuckDBSource
 from makegis.config.makegis import FileSource
 from makegis.config.makegis import WFSSource
@@ -264,3 +266,37 @@ def test_project_with_src_dir(tmp_path):
     assert isinstance(src.source, WFSSource)
     assert src.source.geom_index is None
     assert src.source.geom_column is None
+
+
+def test_env_vars_get_expanded(tmp_path):
+    os.environ["DB_USER"] = "test_user"
+    os.environ["API_KEY"] = "test_key"
+
+    pp = ProjectPrepper(
+        tmp_path,
+        yaml="""
+        defaults:
+          load:
+        targets:
+          dummy:
+            host: dummy
+            user: "{{ DB_USER }}"
+            db: dummy
+    """,
+    )
+
+    pp.add_config(
+        Path("src/schema1"),
+        """
+        nodes:
+          - load: tbl_a
+            wfs: "url?key={{API_KEY}}"
+        """,
+    )
+
+    project = Project(pp.path)
+    project.load()
+
+    assert project.targets["dummy"].user == "test_user"
+    assert isinstance(project.sources[0].source, WFSSource)
+    assert project.sources[0].source.wfs == "url?key=test_key"

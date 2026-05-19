@@ -5,7 +5,7 @@ import re
 
 def expand_dict_strings(raw_dict: dict) -> dict:
     """
-    Replaces {{variables}} found in strings in place.
+    Returns new dict with {{variables}} expanded with corresponding env vars.
     """
     pattern = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
