@@ -16,4 +16,3 @@ def expand_dict_strings(raw_dict: dict) -> dict:
             raise RuntimeError(f"unmatched env var {var}")
         s = re.sub(rf"\{{\{{\s*{var}\s*\}}\}}", os.environ[var], s)
     return ast.literal_eval(s)
-

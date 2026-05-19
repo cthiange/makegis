@@ -1,0 +1,62 @@
+---
+- defaults:
+    load:
+      geom_index: false
+  nodes:
+    - load: table_one
+      duckdb: ./path/to/some.db
+
+    - load: table_two
+      duckdb: ./path/to/some.db
+      table: table_2
+      geom_index: true
+
+
+- defaults:
+    # Also applies to load blocks in run steps
+    load:
+      geom_index: true
+  nodes:
+    - load: table_3
+      file: path/to/file.shp
+      epsg: 2193
+
+    - load: table_4
+      wfs: https://wfs.example.com
+
+    - transform: cleanup_table_4.sql
+
+    - transform: aggregate_table_3.sql
+
+    - run: run_id_1
+      deps:
+        - table: raw.upstream_table
+      steps:
+        - cmd: do_this_first.py
+        - cmd: then_this.py
+        - load: table_1
+          duckdb: ~/path/to/some.db
+          epsg: 4326
+          geom_index: false
+          geom_column: geom
+
+    # Nameless run
+    - run:
+      deps:
+      creates:
+        - table: table_created_by_script_1
+        - table: other_table_created_by_script_1
+        - table: another_table_by_script_2
+      steps:
+        - cmd: script_1.py
+        - cmd: script_2.py
+
+# Named group using project-wide settings
+- name: group3
+  nodes:
+    - load: table_5
+      esri: https://services3.arcgis.com/example/dummy/rest/services/test/FeatureServer/0
+
+    - load: table_raster_512
+      raster: local.tiff
+      tile_size: 512

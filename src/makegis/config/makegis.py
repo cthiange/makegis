@@ -49,6 +49,7 @@ class Defaults(BaseModel):
 
 
 class BaseSource(CommonOptions):
+    load: str
     meta: Dict[str, str | int | float | None] | None = {}
     epsg: int | str | None = None
 
@@ -66,6 +67,9 @@ class CSVSource(BaseSource, VectorOptions):
 class DuckDBSource(BaseSource, VectorOptions):
     duckdb: Path
     table: str | None = None
+
+    def resolved_table(self):
+        return self.load if self.table is None else self.table
 
 
 class EsriSource(BaseSource, VectorOptions):
@@ -86,7 +90,14 @@ class WFSSource(BaseSource, VectorOptions):
     wfs: str
 
 
-LoadItem = CSVSource | DuckDBSource | EsriSource | FileSource | RasterSource | WFSSource
+Source = CSVSource | DuckDBSource | EsriSource | FileSource | RasterSource | WFSSource
+
+
+class Transform(BaseModel):
+    transform: Path
+    name: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class DatabaseItem(BaseModel):
@@ -106,47 +117,26 @@ class DatabaseItem(BaseModel):
             return {"type": tpe, "name": data[tpe]}
 
 
-class RunTask(BaseModel):
+class Command(BaseModel):
     cmd: Path
-    creates: List[DatabaseItem]
 
 
-class CustomNode(BaseModel):
+class Run(BaseModel):
     # Optional local name
-    name: str | None = None
+    run: str | None = None
     deps: list[DatabaseItem] | None = None
-    prep: list[Path] | None = []
+    # Explicit declaration of owned tables created by commands
+    # Not required for tables created by sources or transforms
+    creates: list[DatabaseItem] | None = None
+    steps: list[Command | Source | Transform]
 
-    load: dict[str, LoadItem] | None = None
-    run: list[RunTask] | None = None
-    cleanup: List[Path] | None = None
+    model_config = ConfigDict(extra="forbid")
 
 
 class Group(BaseModel):
     name: str | None = None
     defaults: Defaults | None = None
-    load: dict[str, LoadItem] | None = None
-    transform: list[Path | dict[str, Path]] | None = None
-    custom: list[CustomNode] | None = None
-
-    @field_validator("transform", mode="after")
-    @classmethod
-    def ensure_single_sql_maps(cls, value: Path | dict[str, Path]):
-        """
-        A sql item can be path or name:path mapping.
-        This validator checks that dict items contain exactly 1 mapping.
-
-        ```yaml
-        - sql:
-            - path_one.sql           # path only, ok
-            - two: path_two.sql      # single name:path, ok
-            - this: is.sql           # map > 1, not ok
-              not: allowed.sql
-        ```
-        """
-        if isinstance(value, dict) and len(value) != 1:
-            raise ValueError("sql name:path mapping is not of length 1")
-        return value
+    nodes: list[Source | Transform | Run]
 
 
 class ConfigFile(BaseModel):
@@ -159,13 +149,16 @@ class ConfigFile(BaseModel):
     def from_path(cls, path: Path):
         log.debug(f"reading {path}")
         with open(path) as f:
-            ls = yaml.load(f, Loader)
-        return cls.from_list(path, ls)
+            s = f.read()
+        return cls.from_yaml(path, s)
 
     @classmethod
     def from_yaml(cls, path: Path, s: str):
-        ls = yaml.load(s, Loader)
-        return cls.from_list(path, ls)
+        y = yaml.load(s, Loader)
+        if isinstance(y, list):
+            return cls.from_list(path, y)
+        else:
+            return cls.from_list(path, [y])
 
     @classmethod
     def from_list(cls, path: Path, ls: list):

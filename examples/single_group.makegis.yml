@@ -1,0 +1,14 @@
+---
+defaults:
+  load:
+    geom_index: false
+
+nodes:
+  - load: table_one
+    duckdb: ./path/to/some.db
+
+  - load: table_two
+    duckdb: ./path/to/some.db
+    table: table_2
+    geom_index: true
+

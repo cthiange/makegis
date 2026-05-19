@@ -3,12 +3,13 @@ from typing import Tuple
 
 
 from ..config import makegis as config
-from ..config.makegis import LoadItem
+from ..config.makegis import Source
 from ..config.makegis import DatabaseItem
+from ..config.makegis import Command as ConfigCommand
 from ..config.project import Project
 from ..config.project import ProjectSource
 from ..config.project import ProjectTransform
-from ..config.project import ProjectNode
+from ..config.project import ProjectRun
 from ..core.load import Destination
 from ..core.load import LoadJob
 from ..core.load import CSVSource
@@ -44,8 +45,8 @@ class Builder:
         for pt in project.transforms:
             nodes.append(process_project_transform(pt))
 
-        for pn in project.custom:
-            nodes.append(process_project_node(pn))
+        for pr in project.runs:
+            nodes.append(process_project_run(pr))
 
         return DAG(nodes)
 
@@ -63,7 +64,7 @@ def process_project_source(ps: ProjectSource) -> SourceNode:
 
 def prepare_load_job(
     item_name: str,
-    item: LoadItem,
+    item: Source,
 ) -> LoadJob:
     # Split item name into schema and table name
     schema, table_name = parse_item_name(item_name)
@@ -88,10 +89,9 @@ def prepare_load_job(
         src = EsriSource(url=item.esri, f=item.f, pk=item.pk, **source_options)
     elif isinstance(item, config.DuckDBSource):
         assert item.pk is None, "explicit pk not implemented for duckdb source"
-        assert item.table is not None
         src = DuckDBSource(
             path=item.duckdb,
-            table=item.table,
+            table=item.resolved_table(),
             pk=item.pk,
             **source_options,
         )
@@ -135,43 +135,37 @@ def process_project_transform(pt: ProjectTransform) -> TransformNode:
     )
 
 
-def process_project_node(pn: ProjectNode) -> CustomNode:
-    log.debug(f"processing node {pn.name}")
-    owns = set()
-    # Handle load block
-    load_jobs = []
-    load_block: dict[str, LoadItem] = pn.load or {}
-    for item_name, item in load_block.items():
-        # Creat load job
-        job = prepare_load_job(item_name, item)
-        # Add job's target table to node's owned tables
-        owns.add(
-            DatabaseObject(
-                schema=job.dst.table_schema,
-                name=job.dst.table_name,
-                type="relation",
+def process_project_run(pr: ProjectRun) -> CustomNode:
+    log.debug(f"processing node {pr.name}")
+    owns = set(db_object_from_db_item(dbi) for dbi in pr.creates or [])
+    deps = set(db_object_from_db_item(dbi) for dbi in pr.deps or [])
+    # Handle steps
+    steps = []
+    for step in pr.steps:
+        if isinstance(step, ProjectSource):
+            # Create load job
+            job = prepare_load_job(step.name, step.source)
+            # Add job's target table to node's owned tables
+            owns.add(
+                DatabaseObject(
+                    schema=job.dst.table_schema,
+                    name=job.dst.table_name,
+                    type="relation",
+                )
             )
-        )
-        load_jobs.append(job)
-    # Handle run block
-    run_commands = []
-    for task in pn.run or []:
-        run_commands.append(Command(path=task.cmd))
-        for db_item in task.creates:
-            owns.add(db_object_from_db_item(db_item))
-
-    # Pleasing the type checker.
-    # Context expansion ensures even anon nodes have a name.
-    assert pn.name is not None
+            steps.append(job)
+        elif isinstance(step, Transform):
+            raise NotImplementedError("TODO")
+        elif isinstance(step, ConfigCommand):
+            steps.append(Command(path=step.cmd))
+        else:
+            raise NotImplementedError("TODO")
 
     return CustomNode(
-        id=pn.name,
-        deps=set([db_object_from_db_item(dep) for dep in pn.deps or []]),
+        id=pr.name,
+        deps=deps,
         owns=owns,
-        prep=[Command(path=p) for p in pn.prep or []],
-        load=load_jobs,
-        run=run_commands,
-        cleanup=[Command(path=p) for p in pn.cleanup or []],
+        steps=steps,
     )
 
 

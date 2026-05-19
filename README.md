@@ -6,7 +6,7 @@ A lightweight orchestrator for spatial databases.
 MakeGIS organizes workflows in a DAG whose nodes can be of three types:
  - source nodes: load a dataset into a target database
  - transform nodes: perform transforms within a target database
- - custom nodes: run arbitrary commands
+ - run nodes: run arbitrary commands
 
 It comes with a command line tool, `mkgs`, that operates on the resulting DAG.
 
@@ -30,7 +30,7 @@ Key features/choices:
 
 `pip install makegis`
 
-MakeGIS relies on external tools, such as `ogr2ogr`, to be available.
+MakeGIS relies on external tools, such as `ogr2ogr` and `psql`, to be available.
 
 ## Concept
 
@@ -46,11 +46,11 @@ DAG nodes can depend on other DAG nodes.
 DAG nodes come in three types.
 *Source* nodes own a single database table and describe the data source of that table.
 *Tranfrom* nodes represent SQL to be run against a target database. The SQL statement are parsed to detect any dependencies (database object owned by other nodes).
-Finally, *custom* nodes wrap arbitrary commands.
+Finally, *run* nodes wrap arbitrary commands.
 
 ### Targets
 
-Targets handle all interecation with a database instance. This includes running nodes as well as writing to and reading from the journal (see below).
+Targets handle all interaction with a database instance. This includes running nodes as well as writing to and reading from the journal (see below).
 
 ### Journal
 
@@ -199,35 +199,36 @@ targets:
 The path of a `makegis.yml` determines the database relations they manage, whith top-level directories mapping to schemas.
 
 A `makegis.yml` contains one or more configuration groups.
-A configuration can have an optional `name` and at least one of the following keys:
+A configuration group can have the following keys:
+- name: optional group name, inherited by all nodes in the group
+- defaults: optional group-level defaults, overriding project-level values if needed
+- nodes: list of nodes with at least one member
 
-- defaults: defines group-level defaults, overriding project-level values if needed
+Each item under a `nodes` key must be one of 3 types, distinguished by a specific key:
 - load: defines sources to be loaded to a target
-- custom: custom nodes to run bespoke commands
 - transform: defines SQL transforms to be applied to a target
+- run: run node to run one or more bespoke commands
 
-#### Load block
+#### Load node
 
 Maps tables to external data sources.
 Each table becomes a DAG node and can be invoked individually.
 
 ```yaml
-- name: group1
-  load:
-    <table-name>:
-      <loader>: <loader-arg>
-      <loader-option>: <option-value>
-      <loader-option>: <option-value>
+nodes:
+  - load: <table-name>
+    <loader>: <loader-arg>
+    <loader-option>: <option-value>
+    <loader-option>: <option-value>
     ...
 ```
 
 ```yaml
-- name: group1
-  load:
-    countries:
-      wfs: https://wfs.example.com/countries?token={{API_KEY}}
-      epsg: 4326
-      geom_index: true
+nodes:
+  - load: countries
+    wfs: https://wfs.example.com/countries?token={{API_KEY}}
+    epsg: 4326
+    geom_index: true
 ```
 
 TODO: Document loaders and their options.
@@ -249,50 +250,42 @@ If source has no SRID, no transformation is applied and srid is set to given val
 Convert from source to dest. Warn or abort if source exposes a different SRID
 
 
-#### Transform block
+#### Transform node
 
-Declares sql scripts to be enrolled.
-Each script becomes a DAG node.
+Declares a sql script to be enrolled.
 Dependencies with other DAG nodes are resolved automatically.
-The order in which sql scripts are listed does not matter.
+The order in which transforms are listed does not matter.
 There are no constraints on the content of the sql scripts, as long as MakeGIS can resolve all dependencies.
 
 ```yaml
-- name: group1
-  transform:
-    - create_view_of_awesome_table.sql
-    - create_awesome_table.sql
+nodes:
+  - transform: create_view_of_awesome_table.sql
+  - transform: create_awesome_table.sql
 ```
 
-#### Custom block
+#### Run node
 
-A `custom` block defines one or more custom DAG nodes, for when more flexibility is needed than offered by a `load` or `sql` block.
+A `run` node defines one or more actions to be performed as a single node, for when more flexibility is needed than offered by a `load` or `transform` node.
 
 The price to pay for more flexibility is that dependencies need to be documented manually. This goes for upstream dependecies as well as objects created on the target db.
 
-TODO: update
-
 ```yaml
-- name: group1
-  custom:
-    - name: optional_node_name
-      # List any relations needed by this node.
-      deps:
-        - table: schema.upstream_table
-      # Commands that do not change the target db but need to be run before we proceed.
-      # Commands are run sequentially, in listing order.
-      prep:
-        - before.py
-      # List of commands along with any objects they will create on the target.
-      run:
-        - cmd: script1.py
-          # Declare objects owned by this command
-          creates:
-            - table: new_table
-            - function: helper
+nodes:
+  - run: optional_node_name
+    # List any relations needed by this node.
+    deps:
+      - table: schema.upstream_table
+    # Declare objects owned by this node
+    creates:
+      - table: new_table
+      - function: helper
+    # Steps are run sequentially, in listing order.
+    steps:
+      - cmd: prep.py
+      - cmd: load_new_table.py
+      - cmd: create_helper_function.sh
       # Can also use a load block here, but it won't spawn new DAG nodes
-      <load-block>
-      # Like prep, but runs after `run` and/or `load`.
-      post:
-        - teardown.py
+      - load: table_3
+        file: ./output.shp
+      - cleanup.py
 ```

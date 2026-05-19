@@ -17,7 +17,13 @@ def test_project_2():
     assert isinstance(pf, ProjectFile)
 
 
-def test_makegis():
-    path = Path(__file__).parent.parent / Path("examples/makegis.yml")
+def test_makegis_single():
+    path = Path(__file__).parent.parent / Path("examples/single_group.makegis.yml")
+    pf = ConfigFile.from_path(path)
+    assert isinstance(pf, ConfigFile)
+
+
+def test_makegis_multi():
+    path = Path(__file__).parent.parent / Path("examples/multiple_groups.makegis.yml")
     pf = ConfigFile.from_path(path)
     assert isinstance(pf, ConfigFile)

@@ -13,26 +13,24 @@ def test_build_project(tmp_path):
     pp.add_config(
         Path("schema1"),
         """
-        - name: group_one
-          load:
-            tbl_a:
-              wfs: https://dummy_wfs_url
-            tbl_b:
-              file: layer.shp
-              geom_index: true
-          custom:
-            - prep:
-                - prep.py
-              run:
-                - cmd: do_the_work.sh
-                  creates:
-                    - table: schema1.special_table
-            - name: etl
-              prep:
-                - process.py
-              load:
-                tbl_x:
-                  duckdb: path.db
+        name: group_one
+        nodes:
+          - load: tbl_a
+            wfs: https://dummy_wfs_url
+          - load: tbl_b
+            file: layer.shp
+            geom_index: true
+          - run:
+            creates:
+              - table: schema1.special_table
+            steps:
+              - cmd: prep.py
+              - cmd: do_the_work.sh
+          - run: etl
+            steps:
+              - cmd: process.py
+              - load: tbl_x
+                duckdb: path.db
         """,
     )
 
@@ -77,21 +75,21 @@ def test_defaults_cascade(tmp_path):
             load:
               # Overwrite project default for group
               geom_column: null
-          load:
-            tbl_a:
+          nodes:
+            - load: tbl_a
               wfs: https://dummy_wfs_url
-            tbl_b:
+            - load: tbl_b
               wfs: https://dummy_wfs_url
               # Overwrite group default
               geom_column: geomname
 
         - name: namedgroup
-          load:
-            tbl_x:
+          nodes:
+            - load: tbl_x
               esri: url
               # Overwrite project default with null
               geom_column:
-            tbl_y:
+            - load: tbl_y
               esri: url
               # Overwrite project default with different value
               geom_column: the_geom

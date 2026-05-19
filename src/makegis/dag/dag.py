@@ -59,11 +59,7 @@ class TransformNode(BaseNode):
 @dataclass(frozen=True)
 class CustomNode(BaseNode):
     deps: Set[DatabaseObject]
-    prep: List[Command]
-    load: List[LoadJob]
-    run: List[Command]
-    cleanup: List[Command]
-
+    steps: List[Command | LoadJob | Transform]
 
 type Node = SourceNode | TransformNode | CustomNode
 

@@ -2,7 +2,6 @@ import copy
 import logging
 from pathlib import Path
 from typing import Iterator
-from typing import Literal
 
 from pydantic import BaseModel
 import yaml
@@ -13,8 +12,10 @@ from .makegis import Defaults
 from .makegis import CSVSource
 from .makegis import DuckDBSource
 from .makegis import FileSource
-from .makegis import CustomNode
-from .makegis import LoadItem
+from .makegis import Command
+from .makegis import Run
+from .makegis import Source
+from .makegis import Transform
 from .utils import expand_dict_strings
 
 try:
@@ -33,55 +34,47 @@ This affects the path of local sources (csv, file, duckdb), SQL transform script
 and scripts and sources present in custom nodes.
 
 2. Name expansion
-The fully qualified name of an item is schema + path to file + group name + local name.
+The fully qualified name of an item is schema + path to file + optional group name + local name.
 For sources, the local name is the key.
 For transforms, the local name is the sql file's stem, unless specied as key.
-For custom nodes, the local name is specied with a `name` key or omitted.
+For run nodes, the local name is specified with the `run` key or left blank.
 
 ```yaml
-- group_a:
-  load:
-    table_1:                                # local name: table_1
+- name: group_a
+  nodes:
+    - load: table_1                           # local name: table_1
       file: layer.shp
-  transform:
-    - path/to/script_one.sql                # local name: script_one
-    - better_name: script_two.sql           # local name: better_name
-
-  custom:
-    - name: node_x                          # local name: node_x
-      prep: ...
+    - transform: path/to/script_one.sql       # local name: script_one
+    - run: node_x                             # local name: node_x
+      deps: ...
 ```
 
 3. Table expansion
-Only affects sources (including the ones in custom nodes) and tables owned by custom nodes.
+Only affects sources (including the ones in run steps) and tables owned by run nodes.
 A source creates exactly one table, the full name of which is determined in a similar way as
 for item names.
-For sources in a load block, the table name is the item name.
-For sources in a custom node, it is the full node name + local table name.
-Tables (and other relations) listed as explicit dependencies or under a custom node's `creates`
+For standalone sources, the table name is the item name.
+For sources in a step block, it is the full node name + local table name.
+Tables (and other relations) listed as explicit dependencies or under a run's `creates`
 section should always be speciefied with a fully qualified name.
 
 ```yaml
 # <root>/schema/topic/makegis.yml
-- group_a:
-  load:
-    table_1:                                # table name: schema.topic_group_a_table_1
+- name: group_a:
+  nodes:
+    - load: table_1                         # table name: schema.topic_group_a_table_1
       file: layer.shp
-
-  custom:
-    - load:
-        table_2:                            # table name: schema.topic_group_a_table_2 
-          file: local.shp
-    - name: node_x
+    - load: table_2                         # table name: schema.topic_group_a_table_2 
+      file: local.shp
+    - run: node_x
       deps:
         - table: other.fq_table_1           # used as is
-      load:
-        table_3:                            # table name: schema.topic_group_a_node_x_table_3
+      creates:
+        - table: schema.table_4             # used as is
+      steps:
+        - load: table_3                     # table name: schema.topic_group_a_node_x_table_3
           file: output.shp
-      run:
-        - cmd: run.sh
-          creates:
-            - table: table_4                # table name: schema.topic_group_a_node_x_table_4
+        - cmd: make_table_4.sh
 ```
 
 """
@@ -127,13 +120,16 @@ class Context:
         if node_name is None:
             if not self.prefix:
                 # No node name and no prefix. Node id would boil down to schema.
-                # Might be confusing to don't allow.
+                # Might be confusing so don't allow.
                 raise ProjectError(
                     f"Unnamed custom node in unnamed group under schema {self.schema}"
                 )
         else:
             underscore = "_" if ctx.prefix else ""
+            print("prefix was:", ctx.prefix)
+            print("node_name was:", node_name)
             ctx.prefix += underscore + node_name
+            print("prefix is:", ctx.prefix)
         return NodeContext(ctx)
 
     def expand_name(self, name: str | None):
@@ -149,6 +145,7 @@ class Context:
         Relative paths are interpreted as relative to the config file's directory.
         Absolute paths are kept unchanged.
         """
+        p = p.expanduser()
         if p.is_absolute():
             return p
         return (self.conf_dir / p).absolute()
@@ -157,8 +154,8 @@ class Context:
         """Expands name of a DatabaseItem in place"""
         dbi.name = self.expand_name(dbi.name)
 
-    def expand_source_paths(self, src: LoadItem):
-        """If applicable, expands paths of a LoadItem in place"""
+    def expand_source_paths(self, src: Source):
+        """If applicable, expands paths of a Source in place"""
         if isinstance(src, CSVSource):
             src.csv = self.expand_path(src.csv)
         elif isinstance(src, DuckDBSource):
@@ -232,15 +229,14 @@ class ProjectFile(BaseModel):
 
 
 class ProjectSource(BaseModel):
-    type: Literal["source"]
     name: str
-    source: LoadItem
+    source: Source
 
     def apply_context(self, ctx: Context):
         # DuckDB origin table is item name if not provided.
         # Capturing it before expanding name.
-        if isinstance(self.source, DuckDBSource) and self.source.table is None:
-            self.source.table = self.name
+        # if isinstance(self.source, DuckDBSource) and self.source.table is None:
+        # self.source.table = self.name
         self.name = ctx.expand_name(self.name)
         ctx.expand_source_paths(self.source)
 
@@ -256,7 +252,6 @@ class ProjectSource(BaseModel):
 
 
 class ProjectTransform(BaseModel):
-    type: Literal["transform"]
     name: str
     script: Path
 
@@ -265,8 +260,15 @@ class ProjectTransform(BaseModel):
         self.script = ctx.expand_path(self.script)
 
 
-# Just wrapping CustomNode as it already has a name attribute.
-class ProjectNode(CustomNode):
+class ProjectRun(BaseModel):
+    """Same as run but with explicit name and contextualized step items"""
+
+    name: str
+    deps: list[DatabaseItem] | None = None
+    # Explicit declaration of owned tables created by commands
+    # Not required for tables created by sources or transforms
+    creates: list[DatabaseItem] | None = None
+    steps: list[Command | ProjectSource | Transform]
 
     def apply_context(self, ctx: NodeContext):
         self.name = ctx.node_name
@@ -274,42 +276,33 @@ class ProjectNode(CustomNode):
         # Just a quick check
         for dep in self.deps or []:
             assert "." in dep.name, "Custom node dependencies should be fully qualified"
-        self.prep = [ctx.expand_path(p) for p in self.prep or []]
-        if self.load is not None:
-            # Exapand sources in place
-            for src_name, src in self.load.items():
-                # DuckDB origin table is item name if not provided.
-                # Capturing it before expanding name.
-                if isinstance(src, DuckDBSource) and src.table is None:
-                    src.table = src_name
-                ctx.expand_source_paths(src)
-            # New dict with expanded names (keys)
-            self.load = {ctx.expand_name(name): src for name, src in self.load.items()}
-        if self.run is not None:
-            for task in self.run:
-                task.cmd = ctx.expand_path(task.cmd)
-                # Explicit owned tables must be fully qualified names, so no expanding here.
-                # Just a quick check
-                for database_item in task.creates:
-                    assert (
-                        "." in database_item.name
-                    ), "Custom node outputs should be fully qualified"
+        # Explicit owned tables must be fully qualified names, so no expanding here.
+        # Just a quick check
+        for db_item in self.creates or []:
+            assert "." in db_item.name, "Run node outputs should be fully qualified"
+        assert len(self.steps) > 0, "Run node needs at least one step"
+        for step in self.steps:
+            if isinstance(step, ProjectSource):
+                step.apply_context(ctx)
+            elif isinstance(step, Transform):
+                step.transform = ctx.expand_path(step.transform)
+            elif isinstance(step, Command):
+                step.cmd = ctx.expand_path(step.cmd)
+            else:
+                assert False
 
     def apply_defaults(self, defaults: Defaults | None):
         if defaults is None:
             return
-        if self.load is not None and defaults.load is not None:
-            fallback = defaults.load.model_dump(exclude_unset=True)
 
-            new_sources = {}
-            for name, source in self.load.items():
+        for i, step in enumerate(self.steps):
+            if defaults.load is not None and isinstance(step, ProjectSource):
                 fallback = {
                     k: v
                     for k, v in defaults.load.model_dump(exclude_unset=True).items()
-                    if k not in source.model_fields_set
+                    if k not in step.source.model_fields_set
                 }
-                new_sources[name] = source.model_copy(update=fallback)
-            self.load = new_sources
+                self.steps[i] = step.model_copy(update=fallback)
 
 
 class Project:
@@ -318,7 +311,7 @@ class Project:
     targets: dict[str, TargetConfig]
     sources: list[ProjectSource]
     transforms: list[ProjectTransform]
-    custom: list[ProjectNode]
+    runs: list[ProjectRun]
 
     def __init__(self, pf: Path | ProjectFile):
         """Create a project from a ProjectFile instance or a path to a project file"""
@@ -332,7 +325,7 @@ class Project:
         self.targets = pf.targets
         self.sources = []
         self.transforms = []
-        self.custom = []
+        self.runs = []
 
     def load(self):
         """
@@ -342,34 +335,43 @@ class Project:
             self.enroll_config_file(cf)
 
     def enroll_config_file(self, cf: ConfigFile):
-        path = cf.path.parent.relative_to(self.root)
         for group in cf.groups:
             ctx = Context(self.root, cf.path, group.name)
-            if group.load is not None:
-                for name, item in group.load.items():
-                    ps = ProjectSource(type="source", name=name, source=item)
+            for node in group.nodes:
+                if isinstance(node, Source):
+                    ps = ProjectSource(name=node.load, source=node)
                     ps.apply_context(ctx)
                     ps.apply_defaults(group.defaults)
                     ps.apply_defaults(self.defaults)
                     self.sources.append(ps)
-            for transform in group.transform or []:
-                if isinstance(transform, Path):
-                    name = transform.stem
-                    pt = ProjectTransform(type="transform", name=name, script=transform)
-                else:
-                    assert isinstance(transform, dict) and len(transform) == 1
-                    name, path = next(iter(transform.items()))
-                    assert "." not in name
-                    pt = ProjectTransform(type="transform", name=name, script=path)
-                pt.apply_context(ctx)
-                self.transforms.append(pt)
-            if group.custom is not None:
-                for node in group.custom:
-                    pn = ProjectNode.model_validate(dict(node))
-                    pn.apply_context(ctx.for_node(node.name))
+                elif isinstance(node, Transform):
+                    name = node.name if node.name is not None else node.transform.stem
+                    pt = ProjectTransform(name=name, script=node.transform)
+                    pt.apply_context(ctx)
+                    self.transforms.append(pt)
+                elif isinstance(node, Run):
+                    # Steps are one of Source, Transform or Command
+                    # Source's are wrapped in ProjectSource's so we can contextualize
+                    # their name/destination table too.
+                    steps = []
+                    for step in node.steps:
+                        if isinstance(step, Source):
+                            steps.append(ProjectSource(name=step.load, source=step))
+                        else:
+                            steps.append(step)
+                    name = node.run
+                    pn = ProjectRun(
+                        name=name or "",
+                        deps=node.deps,
+                        creates=node.creates,
+                        steps=steps,
+                    )
+                    pn.apply_context(ctx.for_node(name))
                     pn.apply_defaults(group.defaults)
                     pn.apply_defaults(self.defaults)
-                    self.custom.append(pn)
+                    self.runs.append(pn)
+                else:
+                    assert False
 
 
 def discover_config_files(root: Path) -> Iterator[ConfigFile]:
