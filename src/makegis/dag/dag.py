@@ -61,6 +61,7 @@ class CustomNode(BaseNode):
     deps: Set[DatabaseObject]
     steps: List[Command | LoadJob | Transform]
 
+
 type Node = SourceNode | TransformNode | CustomNode
 
 
@@ -127,7 +128,7 @@ class DAG:
                             raise FailedNodeRun(f"prep {i}/{n} {step} failed")
                     elif isinstance(step, LoadJob):
                         target.load_table(step)
-                    elif isinstance(step,  Transform):
+                    elif isinstance(step, Transform):
                         target.run_transform(step)
                     else:
                         raise NotImplementedError()
@@ -180,9 +181,13 @@ class DAG:
         schemas.sort()
         return schemas
 
-    def render_node(self, node_id: str) -> str:
+    def render_node(self, node_id: str, show_relations=False) -> str:
         """
         Render a DAG node to string.
+
+        :param node_id: id of node to render
+        :param show_relations: also render relationships (owned and required)
+        :returns: string representation of node
         """
         node = self._nodes[node_id]
         match node:
@@ -194,11 +199,12 @@ class DAG:
                 node_type = "C"
             case _:
                 node_type = "?"
-        s = f"[{node_type}] {node.id}\n"
-        for dbo in node.deps:
-            s += f"\t{dbo.full_name} -->\n"
-        for dbo in node.owns:
-            s += f"\t--> {dbo.full_name}\n"
+        s = f"[{node_type}] {node.id}"
+        if show_relations:
+            for dbo in node.deps:
+                s += f"\n\t{dbo.full_name} -->"
+            for dbo in node.owns:
+                s += f"\n\t--> {dbo.full_name}"
         return s
 
     def select_nodes(self, pattern: str) -> List[str]:

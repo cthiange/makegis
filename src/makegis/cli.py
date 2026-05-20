@@ -81,6 +81,12 @@ def cli():
 
     list_parser = subparsers.add_parser("ls", help="list nodes")
     list_parser.add_argument("pattern", type=str, help="DAG selection pattern")
+    list_parser.add_argument(
+        "-r",
+        "--show-relations",
+        action="store_true",
+        help="show relationships",
+    )
     list_parser.set_defaults(func=show)
 
     outdated_parser = subparsers.add_parser("outdated", help="report outdated nodes")
@@ -209,7 +215,7 @@ def show(args):
         return
 
     for node_id in node_ids:
-        print(dag.render_node(node_id))
+        print(dag.render_node(node_id, show_relations=args.show_relations))
 
 
 def load_project() -> Project:
