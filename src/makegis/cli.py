@@ -24,14 +24,14 @@ def cli():
 
     # Handle general -v and -d options outside of argparse.
     args = sys.argv[1:]
-    verbose_flags = ["-v", "--verbose"]
+    quiet_flags = ["-q", "--quiet"]
     debug_flags = ["--debug"]
     debug = any([flag in args for flag in debug_flags])
-    verbose = not debug and any([flag in args for flag in verbose_flags])
-    args = [a for a in args if a not in verbose_flags + debug_flags]
+    quiet = not debug and any([flag in args for flag in quiet_flags])
+    args = [a for a in args if a not in quiet_flags + debug_flags]
 
     # Configure logger
-    level = logging.WARN
+    level = logging.INFO
     format = "%(message)s"
     datefmt = "[%X]"
     show_time = False
@@ -39,8 +39,8 @@ def cli():
     if debug:
         level = logging.DEBUG
         show_path = True
-    elif verbose:
-        level = logging.INFO
+    elif quiet:
+        level = logging.WARNING
     logging.basicConfig(
         level=level,
         format=format,
@@ -58,9 +58,9 @@ def cli():
 
     parser = argparse.ArgumentParser(prog="mkgs")
 
-    # The --verbose and --debug options are parsed outside of argparse but we still declare
+    # The --quiet and --debug options are parsed outside of argparse but we still declare
     # them here so they show up as general options in the generated help.
-    parser.add_argument("-v", "--verbose", action="store_true", help="verbose messages")
+    parser.add_argument("-q", "--quiet", action="store_true", help="only warnings and error messages")
     parser.add_argument("--debug", action="store_true", help="debug messages")
 
     subparsers = parser.add_subparsers(dest="command", help="commands")
@@ -117,7 +117,7 @@ def cli():
     args = parser.parse_args(args)
 
     # Inject verbose or debug option
-    args.verbose = verbose
+    args.quiet = quiet
     args.debug = debug
 
     # Call handler
