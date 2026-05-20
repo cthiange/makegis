@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -28,7 +28,10 @@ mkgs = "makegis.cli:cli"
 Repository = "https://github.com/cthiange/makegis"
 
 [tool.hatch.version]
-path = "src/makegis/__init__.py"
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/makegis/_version.py"
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]

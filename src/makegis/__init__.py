@@ -1,1 +1,1 @@
-__version__ = "0.3.1"
+from makegis._version import __version__
