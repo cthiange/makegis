@@ -119,24 +119,19 @@ class DAG:
             case TransformNode():
                 target.run_transform(node.transform)
             case CustomNode():
-                n = len(node.prep)
-                for i, action in enumerate(node.prep, start=1):
-                    ret = run_action(action.path, f"prep {i}/{n}")
-                    if ret == 0:
-                        continue
-                    raise FailedNodeRun(f"prep {i}/{n} {action} failed")
-                for job in node.load:
-                    target.load_table(job)
-                for i, action in enumerate(node.run):
-                    ret = run_action(action.path, f"run {i}/{n}")
-                    if ret == 0:
-                        continue
-                    raise FailedNodeRun(f"task {i}/{n} {action} failed")
-                for i, action in enumerate(node.cleanup):
-                    ret = run_action(action.path, f"cleanup {i}/{n}")
-                    if ret == 0:
-                        continue
-                    raise FailedNodeRun(f"cleanup {i}/{n} {action} failed")
+                n = len(node.steps)
+                for i, step in enumerate(node.steps, start=1):
+                    if isinstance(step, Command):
+                        ret = run_action(step.path, f"prep {i}/{n}")
+                        if ret != 0:
+                            raise FailedNodeRun(f"prep {i}/{n} {step} failed")
+                    elif isinstance(step, LoadJob):
+                        target.load_table(step)
+                    elif isinstance(step,  Transform):
+                        target.run_transform(step)
+                    else:
+                        raise NotImplementedError()
+
         target.log_event(event)
 
     def get_outdated(
