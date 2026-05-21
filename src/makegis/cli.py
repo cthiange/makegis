@@ -60,7 +60,12 @@ def cli():
 
     # The --quiet and --debug options are parsed outside of argparse but we still declare
     # them here so they show up as general options in the generated help.
-    parser.add_argument("-q", "--quiet", action="store_true", help="only warnings and error messages")
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="only warnings and error messages",
+    )
     parser.add_argument("--debug", action="store_true", help="debug messages")
 
     subparsers = parser.add_subparsers(dest="command", help="commands")
