@@ -32,6 +32,14 @@ Key features/choices:
 
 MakeGIS relies on external tools, such as `ogr2ogr` and `psql`, to be available.
 
+
+### Development
+
+```
+cd makegis
+pip install -e ".[test]"
+```
+
 ## Concept
 
 A quick overview of the main components underpinning MakeGIS

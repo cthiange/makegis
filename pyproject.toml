@@ -27,6 +27,11 @@ mkgs = "makegis.cli:cli"
 [project.urls]
 Repository = "https://github.com/cthiange/makegis"
 
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
 [tool.hatch.version]
 source = "vcs"
 
