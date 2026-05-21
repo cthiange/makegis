@@ -200,11 +200,18 @@ class DAG:
             case _:
                 node_type = "?"
         s = f"[{node_type}] {node.id}"
-        if show_relations:
-            for dbo in node.deps:
-                s += f"\n\t{dbo.full_name} -->"
-            for dbo in node.owns:
-                s += f"\n\t--> {dbo.full_name}"
+        if show_relations and node.owns:
+            s += f"\n    owns:"
+            owned = list(node.owns)
+            owned.sort()
+            for dbo in owned:
+                s += f"\n      {dbo.full_name}"
+        if show_relations and node.deps:
+            s += f"\n    uses:"
+            deps = list(node.deps)
+            deps.sort()
+            for dbo in deps:
+                s += f"\n      {dbo.full_name}"
         return s
 
     def select_nodes(self, pattern: str) -> List[str]:
