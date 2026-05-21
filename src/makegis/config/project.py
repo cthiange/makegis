@@ -295,14 +295,14 @@ class ProjectRun(BaseModel):
         if defaults is None:
             return
 
-        for i, step in enumerate(self.steps):
+        for step in self.steps:
             if defaults.load is not None and isinstance(step, ProjectSource):
                 fallback = {
                     k: v
                     for k, v in defaults.load.model_dump(exclude_unset=True).items()
                     if k not in step.source.model_fields_set
                 }
-                self.steps[i] = step.model_copy(update=fallback)
+                step.source = step.source.model_copy(update=fallback)
 
 
 class Project:

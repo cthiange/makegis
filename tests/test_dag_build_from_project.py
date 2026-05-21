@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from makegis.config.project import Project
+from makegis.core.load import LoadJob
 from makegis.dag.builder import Builder
 from makegis.dag.dag import SourceNode
 from makegis.dag.dag import CustomNode
@@ -75,6 +76,7 @@ def test_defaults_cascade(tmp_path):
             load:
               # Overwrite project default for group
               geom_column: null
+              epsg: 1234
           nodes:
             - load: tbl_a
               wfs: https://dummy_wfs_url
@@ -93,6 +95,21 @@ def test_defaults_cascade(tmp_path):
               esri: url
               # Overwrite project default with different value
               geom_column: the_geom
+
+        - defaults:
+            load:
+              epsg: 4321
+          nodes:
+          - run: a_custom_node
+            steps:
+              - load: tbl_custom_1
+                duckdb: file.db
+                epsg: 4326:2193
+              - load: tbl_custom_2
+                duckdb: file.db
+                geom_column: custom_geom
+
+
         """,
     )
 
@@ -100,11 +117,12 @@ def test_defaults_cascade(tmp_path):
     project.load()
 
     dag = Builder.build_project(project)
-    assert len(dag._nodes) == 4
+    assert len(dag._nodes) == 5
 
     node = dag._nodes["schema1.tbl_a"]
     assert isinstance(node, SourceNode)
     assert node.job.dst.geom_column is None
+    assert node.job.dst.epsg == 1234
 
     node = dag._nodes["schema1.tbl_b"]
     assert isinstance(node, SourceNode)
@@ -117,3 +135,14 @@ def test_defaults_cascade(tmp_path):
     node = dag._nodes["schema1.namedgroup_tbl_y"]
     assert isinstance(node, SourceNode)
     assert node.job.dst.geom_column == "the_geom"
+
+    node = dag._nodes["schema1.a_custom_node"]
+    assert isinstance(node, CustomNode)
+    assert isinstance(node.steps[0], LoadJob)
+    assert node.steps[0].dst.geom_column == "geom"
+    assert node.steps[0].src.epsg == 4326
+    assert node.steps[0].dst.epsg == 2193
+    assert isinstance(node.steps[1], LoadJob)
+    assert node.steps[1].dst.geom_column == "custom_geom"
+    assert node.steps[1].src.epsg is None
+    assert node.steps[1].dst.epsg == 4321
