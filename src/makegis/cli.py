@@ -181,7 +181,9 @@ def run(args):
 
     if not args.force:
         outdated = dag.get_outdated(target, limit_to=node_ids)
-        node_ids = outdated
+        # Keep outdated only, preserving topological order of node_ids
+        # TODO: too brittle, refactor node selection to prevent breaking again in future
+        node_ids = [nid for nid in node_ids if nid in outdated]
 
         if not node_ids:
             print("All selected nodes are up to date. Use --force to run anyways.")
