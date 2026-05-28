@@ -74,7 +74,14 @@ class State:
 
     def alter(self, target: DBO):
         # Ensure this table was created by this script.
-        if target not in self.news and target not in self.tx_news:
+        if (
+            target not in self.news
+            and target not in self.tx_news
+            and target not in self.tmps
+        ):
+            print(target)
+            print(self.news)
+            print(self.tx_news)
             raise NotImplementedError(
                 f"Altering existing tables not supported yet ({target})"
             )

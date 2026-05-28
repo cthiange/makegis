@@ -118,6 +118,20 @@ def test_alter_owned_table():
     assert r.dependencies == {DBO("", "dep", "relation")}
 
 
+def test_alter_temp_table():
+    sql = """
+    begin;
+    create temp table foo as
+        select *
+        from dep;
+    alter table foo add primary key(id);
+    commit;
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == set()
+    assert r.dependencies == {DBO("", "dep", "relation")}
+
+
 def test_alter_existing_table_raises_error():
     sql = """
     alter table foo add primary key(id);
