@@ -1,4 +1,3 @@
-from makegis.errors import FailedNodeRun
 import logging
 import os
 import re
@@ -18,7 +17,7 @@ from ..core.load import LoadJob
 from ..core.transforms import Transform
 from ..core.commands import Command
 from .. import journal
-from .. import errors
+from ..errors import FailedNodeRun
 from ..utils import capture_logs
 from ..targets import Target
 
