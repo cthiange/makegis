@@ -71,8 +71,8 @@ dependencies = [
     { name = "sqlglot" },
 ]
 
-[package.optional-dependencies]
-test = [
+[package.dev-dependencies]
+dev = [
     { name = "pytest" },
 ]
 
@@ -81,13 +81,14 @@ requires-dist = [
     { name = "duckdb" },
     { name = "psycopg", extras = ["binary"] },
     { name = "pydantic" },
-    { name = "pytest", marker = "extra == 'test'" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "sqlglot" },
 ]
-provides-extras = ["test"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest" }]
 
 [[package]]
 name = "markdown-it-py"

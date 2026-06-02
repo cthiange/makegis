@@ -27,8 +27,8 @@ mkgs = "makegis.cli:cli"
 [project.urls]
 Repository = "https://github.com/cthiange/makegis"
 
-[project.optional-dependencies]
-test = [
+[dependency-groups]
+dev = [
     "pytest",
 ]
 
@@ -37,6 +37,9 @@ source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/makegis/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/makegis"]
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
