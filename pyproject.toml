@@ -29,6 +29,7 @@ Repository = "https://github.com/cthiange/makegis"
 
 [dependency-groups]
 dev = [
+    "ty",
     "pytest",
 ]
 
