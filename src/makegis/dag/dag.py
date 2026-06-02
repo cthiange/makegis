@@ -112,7 +112,7 @@ class DAG:
 
     def run_node(self, node_id: str, target: Target):
         node = self._nodes[node_id]
-        event = journal.RunEvent(node_id).start()
+        event = journal.RunEvent(node_id, target.get_version()).start()
         match node:
             case SourceNode():
                 target.load_table(node.job)

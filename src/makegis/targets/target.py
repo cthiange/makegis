@@ -41,6 +41,16 @@ class Target:
         log.debug(f"fetching manifest from target")
         return self._inner.fetch_manifest()
 
+    def get_version(self) -> str:
+        """
+        Retrieve version of target database.
+        """
+        version = self._inner.get_version()
+        if version is None:
+            log.warning(f"could not retrieve target version")
+            return "could not retrieve"
+        return version
+
     def log_event(self, event: RunEvent):
         log.debug("logging run to journal")
         record = event.to_record(self._cfg.user)

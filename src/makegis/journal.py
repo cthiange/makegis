@@ -23,13 +23,15 @@ class RunRecord:
     hostname: str
     mkgs_version: str
     repo_hash: str | None
+    target_version: str
 
 
 class RunEvent:
 
-    def __init__(self, node_id: str):
+    def __init__(self, node_id: str, target_version: str):
         self._node_id = node_id
         self._started: datetime | None = None
+        self._target_version: str = target_version
 
     def start(self) -> Self:
         """Register run or abort if already running"""
@@ -46,6 +48,7 @@ class RunEvent:
             hostname=platform.node(),
             mkgs_version=__version__,
             repo_hash=get_repo_hash(),
+            target_version=self._target_version,
         )
 
 

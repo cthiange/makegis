@@ -107,7 +107,8 @@ class PostgisTarget:
                     db_user text not null,
                     hostname text not null,
                     mkgs_version text not null,
-                    repo_revision text
+                    repo_revision text,
+                    target_version text
                 );
                 """)
             conn.commit()
@@ -120,6 +121,22 @@ class PostgisTarget:
             log.debug(statement)
             conn.execute(statement)
 
+    def get_version(self) -> str | None:
+        """
+        Return string representing postgres and postgis versions.
+        """
+        with psycopg.connect(self.conn_str) as conn:
+            row = conn.execute("""
+                select version()
+                    , postgis_scripts_installed()
+                    , postgis_scripts_released()
+                """).fetchone()
+            if row is None:
+                return None
+            postgres, gis_used, gis_available = row
+            postgis = gis_used if gis_used == gis_available else f"{gis_used} ({gis_available})"
+            return f"{postgres} | PostGIS: {postgis}"
+
     def log_event(self, record: RunRecord):
         with psycopg.connect(self.conn_str) as conn:
             conn.execute(
@@ -131,8 +148,9 @@ class PostgisTarget:
                     db_user,
                     hostname,
                     mkgs_version,
-                    repo_revision
-                ) values (%s, %s, %s, %s, %s, %s, %s);
+                    repo_revision,
+                    target_version
+                ) values (%s, %s, %s, %s, %s, %s, %s, %s);
                 """,
                 (
                     record.node_id,
@@ -142,6 +160,7 @@ class PostgisTarget:
                     record.hostname,
                     record.mkgs_version,
                     record.repo_hash,
+                    record.target_version,
                 ),
             )
 
