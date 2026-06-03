@@ -272,6 +272,21 @@ def test_builtin_count_function():
     assert r.dependencies == {DBO("", "dep", "relation")}
 
 
+def test_add_constraint_unique():
+    sql = """
+    create temp table tmp_test as
+        select id
+            , col_a
+            , col_b
+        from dep;
+
+    alter table tmp_test add constraint sqlglot_needs_a_name_here unique(col_a, col_b);
+    """
+    r = analyze_sql_content(sql)
+    assert r.created == set()
+    assert r.dependencies == {DBO("", "dep", "relation")}
+
+
 def test_postgis_functions():
     """
     Postgis functions should not be listed as dependencies.
