@@ -1,0 +1,17 @@
+---
+defaults:
+  load:
+    epsg: 2193
+    geom_index: False
+    geom_column: geom
+    raster_index: False
+    raster_column: rast
+    raster_constraints: False
+  target: pg_test
+
+targets:
+  pg_test:
+    host: "{{ MKGS_TEST_BENCH_PG_HOST }}"
+    port: "{{ MKGS_TEST_BENCH_PG_PORT }}"
+    user: "{{ MKGS_TEST_BENCH_PG_USER }}"
+    db: tmp_test_will_be_deleted

@@ -1,0 +1,3 @@
+nodes:
+  - load: csv_table
+    csv: ../data/csv_table.csv
