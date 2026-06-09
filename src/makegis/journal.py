@@ -13,6 +13,9 @@ log = logging.getLogger("makegis")
 
 type Manifest = Dict[str, datetime]
 
+# Current schema revision
+JOURNAL_SCHEMA_REVISION = 1
+
 
 @dataclass(frozen=True)
 class RunRecord:
@@ -34,7 +37,7 @@ class RunEvent:
         self._target_version: str = target_version
 
     def start(self) -> Self:
-        """Register run or abort if already running"""
+        """Record start time of event"""
         self._started = datetime.now(timezone.utc)
         return self
 
@@ -50,6 +53,16 @@ class RunEvent:
             repo_hash=get_repo_hash(),
             target_version=self._target_version,
         )
+
+
+@dataclass(frozen=True)
+class MigrationRecord:
+    revision: int
+    since: datetime
+
+    @classmethod
+    def new(cls, revision: int):
+        return cls(revision=revision, since=datetime.now(timezone.utc))
 
 
 def get_repo_hash() -> str | None:

@@ -7,15 +7,11 @@ pytestmark = [pytest.mark.bench, pytest.mark.mkgs_run]
 
 
 def test_run_single_load(initialized_db):
-    p = mkgs_run("raw.csv_table")
-    assert p.returncode == 0
-    assert "ERROR" not in p.stdout.decode("utf8")
+    mkgs_run("raw.csv_table")
 
 
 def test_run_is_logged_in_journal(initialized_db):
-    p = mkgs_run("raw.csv_table")
-    assert p.returncode == 0
-    assert "ERROR" not in p.stdout.decode("utf8")
+    mkgs_run("raw.csv_table")
 
     db = initialized_db
     r = db.query_one("""

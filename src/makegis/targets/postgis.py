@@ -21,7 +21,9 @@ from ..core.transforms import Transform
 from ..errors import FailedNodeRun
 from ..utils import capture_logs
 from ..journal import RunRecord
+from ..journal import MigrationRecord
 from ..journal import Manifest
+from ..journal import JOURNAL_SCHEMA_REVISION
 
 log = logging.getLogger("makegis")
 
@@ -97,10 +99,19 @@ class PostgisTarget:
         if ret != 0:
             raise RuntimeError(f"error while running sql transform {path}")
 
+    def is_initialized(self) -> bool:
+        """Returns True if target has already been initialized"""
+        with psycopg.connect(self.conn_str) as conn:
+            r = conn.execute(
+                "select to_regclass('_makegis_runs') is not null"
+            ).fetchone()
+            assert r is not None
+            return r[0]
+
     def init_journal(self):
         with psycopg.connect(self.conn_str) as conn:
             conn.execute("""
-                create table if not exists _makegis_runs (
+                create table _makegis_runs (
                     node_id text not null,
                     started timestamp not null,
                     completed timestamp not null,
@@ -111,6 +122,20 @@ class PostgisTarget:
                     target_version text
                 );
                 """)
+            conn.execute("""
+                create table _makegis_revisions (
+                    revision int primary key,
+                    since timestamp not null
+                );
+                """)
+            # Insert current revision
+            conn.execute(
+                """
+                insert into _makegis_revisions (revision, since)
+                values (%s, now());
+            """,
+                (JOURNAL_SCHEMA_REVISION,),
+            )
             conn.commit()
 
     def ensure_schema(self, schema: str):
@@ -134,7 +159,11 @@ class PostgisTarget:
             if row is None:
                 return None
             postgres, gis_used, gis_available = row
-            postgis = gis_used if gis_used == gis_available else f"{gis_used} ({gis_available})"
+            postgis = (
+                gis_used
+                if gis_used == gis_available
+                else f"{gis_used} ({gis_available})"
+            )
             return f"{postgres} | PostGIS: {postgis}"
 
     def log_event(self, record: RunRecord):
@@ -191,6 +220,60 @@ class PostgisTarget:
         os.environ["MKGS_TARGET_DBNAME"] = self.db
         os.environ["MKGS_TARGET_USER"] = self.user
 
+    def get_journal_revision(self) -> int | None:
+        with psycopg.connect(self.conn_str) as conn:
+            r = conn.execute(
+                "select to_regclass('_makegis_revisions') is not null"
+            ).fetchone()
+            has_rev_table = r is not None and r[0] is True
+
+            if has_rev_table:
+                r = conn.execute(
+                    "select max(revision) from _makegis_revisions"
+                ).fetchone()
+                assert r is not None
+                return r[0]
+
+            # Revisions table was introduced in first migration.
+            # If absent, db is either not initialized or on rev 0.
+            # Runs table has been present since rev 0, so check that
+            # to determine if not initialized yet.
+            r = conn.execute(
+                "select to_regclass('_makegis_runs') is not null"
+            ).fetchone()
+            has_runs_table = r is not None and r[0] is True
+            return 0 if has_runs_table else None
+
+    def apply_journal_migration_1(self, record: MigrationRecord):
+        """Migrate journal from rev 0 to rev 1"""
+        log.debug("applying journal migration 1 (rev 0 to rev 1)")
+        assert record.revision == 1
+        with psycopg.connect(self.conn_str) as conn:
+            log.debug("mig 1 - adding target_version column to runs table")
+            conn.execute("""
+                alter table _makegis_runs
+                add column target_version text;
+            """)
+
+            log.debug("mig 1 - creating revisions table")
+            conn.execute("""
+                create table _makegis_revisions (
+                    revision int primary key,
+                    since timestamp not null
+                );
+            """)
+
+            log.debug("mig 1 - bumping revision")
+            conn.execute(
+                """
+                insert into _makegis_revisions (revision, since)
+                values (%s, %s);
+            """,
+                (record.revision, record.since),
+            )
+
+            conn.commit()
+
 
 class Table:
 
@@ -242,7 +325,9 @@ def ddb2pg(conn_str: str, src: DuckDBSource, dst: Destination, launder=True):
     # https://duckdb.org/docs/configuration/pragmas.html#table-information
     columns = db.sql(f"pragma table_info('src.{src.table}');").fetchall()
 
-    statement = f"create or replace table pg.{dst.table_schema}.{dst.table_name} as select"
+    statement = (
+        f"create or replace table pg.{dst.table_schema}.{dst.table_name} as select"
+    )
     for i, col, dtype, not_null, default, pk in columns:
         if dtype == "GEOMETRY" and not dst.attributes_only:
             # Convert geometry to hexwkb for PostGIS

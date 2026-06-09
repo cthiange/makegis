@@ -3,4 +3,5 @@ markers = [
     "bench: bench tests connecting to test DBs",
     "mkgs_init: subset of bench tests testing `mkgs init`",
     "mkgs_run: subset of bench tests testing `mkgs run`",
+    "mkgs_migrate: subset of bench tests testing `mkgs migrate`",
 ]

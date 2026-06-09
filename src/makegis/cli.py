@@ -94,6 +94,10 @@ def cli():
     )
     list_parser.set_defaults(func=show)
 
+    migrate_parser = subparsers.add_parser("migrate", help="migrate journal tables")
+    add_target_argument(migrate_parser)
+    migrate_parser.set_defaults(func=migrate)
+
     outdated_parser = subparsers.add_parser("outdated", help="report outdated nodes")
     add_target_argument(outdated_parser)
     outdated_parser.set_defaults(func=outdated)
@@ -142,6 +146,15 @@ def init(args):
     dag = Builder.build_project(project)
     target.ensure_schemas(dag.list_schemas())
     target.init_journal()
+
+
+def migrate(args):
+    project = load_project()
+    target_id = args.target or project.defaults.target
+    assert target_id is not None
+    log.info(f"using target {target_id}")
+    target = Target(project.targets[target_id])
+    target.migrate_journal()
 
 
 def outdated(args):

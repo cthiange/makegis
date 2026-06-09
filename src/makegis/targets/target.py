@@ -5,7 +5,9 @@ from ..core.load import LoadJob
 from ..core.transforms import Transform
 from ..config.project import TargetConfig
 from ..journal import RunEvent
+from ..journal import MigrationRecord
 from ..journal import Manifest
+from ..journal import JOURNAL_SCHEMA_REVISION
 from .postgis import PostgisTarget
 
 from .. import __version__
@@ -28,7 +30,10 @@ class Target:
         self._inner.run_transform(transform)
 
     def init_journal(self):
-        log.debug("initializing event table")
+        if self._inner.is_initialized():
+            log.info("target has already been initialized")
+            return
+        log.debug("initializing journal tables")
         self._inner.init_journal()
 
     def ensure_schemas(self, schemas: List[str]):
@@ -40,6 +45,26 @@ class Target:
     def fetch_manifest(self) -> Manifest:
         log.debug(f"fetching manifest from target")
         return self._inner.fetch_manifest()
+
+    def migrate_journal(self):
+        log.debug(f"migrating journal")
+        rev = self._inner.get_journal_revision()
+        log.info("journal is at revsion {rev}")
+        if rev is None:
+            log.error("target is not initialized - run `mkgs init`")
+            return
+        if rev == JOURNAL_SCHEMA_REVISION:
+            log.info("target journal is on latest revsion - no migrations to apply")
+            return
+
+        log.info("migrating journal to revision {JOURNAL_SCHEMA_REVISION}")
+        migrations = [
+            self._inner.apply_journal_migration_1,
+        ]
+        for i, mig in enumerate(migrations[rev:]):
+            mig_revision = rev + i + 1
+            log.info(f"applying migration {mig_revision}")
+            mig(MigrationRecord.new(mig_revision))
 
     def get_version(self) -> str:
         """

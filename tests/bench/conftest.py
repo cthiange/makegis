@@ -54,6 +54,7 @@ class _TempDB:
     def execute(self, sql: str):
         with pg.connect(self.uri) as conn:
             conn.execute(sql)  # type: ignore
+            conn.commit()
 
     def query_one(self, sql: str) -> tuple | None:
         with pg.connect(self.uri, row_factory=namedtuple_row) as conn:
@@ -72,7 +73,31 @@ class InitializedDB(_TempDB):
     def __init__(self):
         super().__init__()
         # run `mkgs init` to create journal and targeted schemas
-        assert mkgs_init().returncode == 0
+        mkgs_init(assert_ok=True)
+
+
+class RevZeroDB(_TempDB):
+    """
+    Test db initialized by older version and still on schema rev 0
+
+    Used to test migrations.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Create rev 0 journal
+        # No migration table yet
+        self.execute("""
+            create table _makegis_runs (
+                node_id text not null,
+                started timestamp not null,
+                completed timestamp not null,
+                db_user text not null,
+                hostname text not null,
+                mkgs_version text not null,
+                repo_revision text
+            );
+        """)
 
 
 @pytest.fixture
@@ -89,3 +114,11 @@ def initialized_db(load_env) -> InitializedDB:
     Create fresh new db for a test with journal and expected schemas.
     """
     return InitializedDB()
+
+
+@pytest.fixture
+def rev_zero_db(load_env) -> RevZeroDB:
+    """
+    Create db at rev 0 to test migrations
+    """
+    return RevZeroDB()
