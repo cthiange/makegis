@@ -49,7 +49,7 @@ class Target:
     def migrate_journal(self):
         log.debug(f"migrating journal")
         rev = self._inner.get_journal_revision()
-        log.info("journal is at revsion {rev}")
+        log.info(f"journal is at revsion {rev}")
         if rev is None:
             log.error("target is not initialized - run `mkgs init`")
             return
@@ -57,7 +57,7 @@ class Target:
             log.info("target journal is on latest revsion - no migrations to apply")
             return
 
-        log.info("migrating journal to revision {JOURNAL_SCHEMA_REVISION}")
+        log.info(f"migrating journal to revision {JOURNAL_SCHEMA_REVISION}")
         migrations = [
             self._inner.apply_journal_migration_1,
         ]
