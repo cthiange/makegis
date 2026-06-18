@@ -244,7 +244,7 @@ class DAG:
             search = search[:-1]
         if "+" in search:
             raise ValueError(
-                "The '+' graph operator can only be used at the start and end of a selectio pattern"
+                "The '+' graph operator can only be used at the start and end of a selection pattern"
             )
 
         # Convert search term to equivalent regex
@@ -258,11 +258,27 @@ class DAG:
             if re.match(p, node_id):
                 selection.add(node_id)
 
-        # Collect upstream and downstream nodes if needed
-        if upstream or downstream:
-            raise NotImplementedError(
-                "The `+` graph selection operator is not supported yet"
-            )
+        # Collect downstream nodes, if needed
+        downstream_selection = set(selection)
+        ts = graphlib.TopologicalSorter(self._graph)
+        if downstream:
+            for node_id in ts.static_order():
+                parent_ids = self._graph[node_id]
+                if downstream_selection & parent_ids:
+                    # At least one of the node's parents is in selection,
+                    # so add node to selection
+                    downstream_selection.add(node_id)
+
+        # Collect upstream nodes, if needed
+        upstream_selection = set()
+        upstream_queue = set(selection)
+        while upstream_queue:
+            node_id = upstream_queue.pop()
+            parent_ids = self._graph[node_id]
+            upstream_selection = upstream_selection | parent_ids
+            upstream_queue = upstream_queue | parent_ids
+
+        selection = selection | upstream_selection | downstream_selection
 
         # Sort nodes topologically
         ts = graphlib.TopologicalSorter(self._graph)
