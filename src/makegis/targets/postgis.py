@@ -753,7 +753,7 @@ def raster2pgsql(
         target.user,
     ]
 
-    r2p_process = subprocess.Popen(r2p_cmd)
+    r2p_process = subprocess.Popen(r2p_cmd, stdout=subprocess.PIPE)
 
     # Pipe raster2pgsql output to psql
     psql_process = subprocess.Popen(
