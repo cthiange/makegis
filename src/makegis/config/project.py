@@ -126,10 +126,7 @@ class Context:
                 )
         else:
             underscore = "_" if ctx.prefix else ""
-            print("prefix was:", ctx.prefix)
-            print("node_name was:", node_name)
             ctx.prefix += underscore + node_name
-            print("prefix is:", ctx.prefix)
         return NodeContext(ctx)
 
     def expand_name(self, name: str | None):
