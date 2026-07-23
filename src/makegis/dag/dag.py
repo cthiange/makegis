@@ -262,6 +262,7 @@ class DAG:
         downstream_selection = set(selection)
         ts = graphlib.TopologicalSorter(self._graph)
         if downstream:
+            log.debug("collecting downstream nodes")
             for node_id in ts.static_order():
                 parent_ids = self._graph[node_id]
                 if downstream_selection & parent_ids:
@@ -271,12 +272,14 @@ class DAG:
 
         # Collect upstream nodes, if needed
         upstream_selection = set()
-        upstream_queue = set(selection)
-        while upstream_queue:
-            node_id = upstream_queue.pop()
-            parent_ids = self._graph[node_id]
-            upstream_selection = upstream_selection | parent_ids
-            upstream_queue = upstream_queue | parent_ids
+        if upstream:
+            log.debug("collecting upstream nodes")
+            upstream_queue = set(selection)
+            while upstream_queue:
+                node_id = upstream_queue.pop()
+                parent_ids = self._graph[node_id]
+                upstream_selection = upstream_selection | parent_ids
+                upstream_queue = upstream_queue | parent_ids
 
         selection = selection | upstream_selection | downstream_selection
 
