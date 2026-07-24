@@ -199,6 +199,8 @@ def db_object_from_db_item(item: DatabaseItem) -> DatabaseObject:
     match item.type:
         case "table":
             return DatabaseObject(schema=schema, name=name, type="relation")
+        case "view":
+            return DatabaseObject(schema=schema, name=name, type="relation")
         case "function":
             return DatabaseObject(schema=schema, name=name, type="function")
     raise ValueError(f"Unknown database item type {item.type}")

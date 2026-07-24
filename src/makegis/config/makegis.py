@@ -102,7 +102,7 @@ class Transform(BaseModel):
 
 class DatabaseItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["table", "function"]
+    type: Literal["table", "view", "function"]
     name: str
 
     @model_validator(mode="before")
@@ -112,6 +112,8 @@ class DatabaseItem(BaseModel):
             assert len(data) == 1
             if "table" in data:
                 tpe = "table"
+            elif "view" in data:
+                tpe = "view"
             elif "function" in data:
                 tpe = "function"
             return {"type": tpe, "name": data[tpe]}

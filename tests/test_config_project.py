@@ -144,7 +144,7 @@ def test_runs(tmp_path):
             - run: other_node
               deps:
                 - table: upstream.table_x
-                - table: upstream.table_y
+                - view: upstream.view_y
               steps:
                 - cmd: do_this_first.sh
                 - cmd: then_prepare_duckdb.py
@@ -185,6 +185,8 @@ def test_runs(tmp_path):
     assert len(pr.deps) == 2
     assert pr.deps[0].type == "table"
     assert pr.deps[0].name == "upstream.table_x"
+    assert pr.deps[1].type == "view"
+    assert pr.deps[1].name == "upstream.view_y"
 
     # Node 2 - Steps
     assert len(pr.steps) == 4
