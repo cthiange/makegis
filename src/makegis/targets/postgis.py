@@ -53,6 +53,8 @@ class PostgisTarget:
                 match job.src.path.suffix:
                     case ".gdb":
                         load_gdb(self.conn_uri, job.src, job.dst)
+                    case ".gpkg":
+                        load_gpkg(self.conn_uri, job.src, job.dst)
                     case ".shp":
                         load_shp(self.conn_uri, job.src, job.dst)
                     case _:
@@ -610,6 +612,42 @@ def load_gdb(
     if ret != 0:
         raise FailedNodeRun(f"loading gdb source failed with code {ret}")
 
+def load_gpkg(
+    conn_str: str,
+    src: FileSource,
+    dst: Destination,
+):
+    """
+    Uses local ogr2ogr executable.
+    """
+    cmd = f'ogr2ogr -f "PostgreSQL" PG:"{conn_str}"'
+    assert src.layer is not None
+    cmd += f' "{src.path}" "{src.layer}"'
+    options = ""
+    options += f' -nln "{dst.table_schema}.{dst.table_name}"'
+    options += f" -lco FID={'gid' if src.pk is None else src.pk}"
+    options += " -progress"
+    if dst.geom_column is not None:
+        options += f" -lco GEOMETRY_NAME={dst.geom_column}"
+    if src.epsg is not None:
+        options += f" -s_srs EPSG:{src.epsg}"
+    if dst.epsg is not None:
+        options += f" -t_srs EPSG:{dst.epsg}"
+    if dst.attributes_only:
+        options += f" -nlt NONE"
+    options += " --config OGR_PG_ENABLE_METADATA=NO"
+    # options += " --config OGR2OGR_USE_ARROW_API=NO"
+    options += " -overwrite"
+    if dst.geom_index:
+        options += " -lco SPATIAL_INDEX=GIST"
+    else:
+        options += " -lco SPATIAL_INDEX=NONE"
+    cmd += options
+
+    ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
+    log.debug(f"return code: {ret}")
+    if ret != 0:
+        raise FailedNodeRun(f"loading gpkg source failed with code {ret}")
 
 def load_shp(
     conn_str: str,
