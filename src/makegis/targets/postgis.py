@@ -608,7 +608,7 @@ def load_gdb(
     ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
     log.debug(f"return code: {ret}")
     if ret != 0:
-        raise FailedNodeRun("loading gdb source failed with code {ret}")
+        raise FailedNodeRun(f"loading gdb source failed with code {ret}")
 
 
 def load_shp(
@@ -645,7 +645,7 @@ def load_shp(
     ret = run_ogr_cmd(cmd, f"{dst.table_schema}.{dst.table_name}")
     log.debug(f"return code: {ret}")
     if ret != 0:
-        raise FailedNodeRun("loading shapefile source failed with code {ret}")
+        raise FailedNodeRun(f"loading shapefile source failed with code {ret}")
 
 
 def load_esri(
@@ -772,7 +772,7 @@ def raster2pgsql(
     log.debug(f"raster2pgsql return code: {ret}")
     if ret != 0:
         raise FailedNodeRun(
-            "loading raster source (raster2pgsql) failed with code {ret}"
+            f"loading raster source (raster2pgsql) failed with code {ret}"
         )
 
     ret = psql_process.wait()
